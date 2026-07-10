@@ -46,7 +46,7 @@ services:
     
     # 🚀 ADICIONE ESTE BLOCO EXATAMENTE AQUI:
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
       interval: 10s      # O Docker vai testar a saúde do backend a cada 10 segundos
       timeout: 5s       # Se o backend demorar mais de 5 segundos para responder, falhou
       retries: 3        # O Docker tenta 3 vezes antes de marcar o contêiner como "Unhealthy"
