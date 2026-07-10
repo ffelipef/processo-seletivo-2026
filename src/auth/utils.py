@@ -9,6 +9,8 @@ from src.database import get_db # Certifique-se de que sua factory de sessão ch
 from src.config import settings
 from src.auth.models import User
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 # Configuração de segurança
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
@@ -44,7 +46,7 @@ def decode_access_token(token: str) -> dict:
 
 # DEPENDÊNCIAS DO FASTAPI (Para proteção de rotas - UC05)
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Token inválido ou expirado",
@@ -56,8 +58,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user_id is None:
         raise credentials_exception
     
-    # Busca o usuário real no banco de dados para garantir integridade absoluta
-    user = db.query(User).filter(User.id == user_id).first()
+    # 🚀 BUSCA ASSÍNCRONA CORRIGIDA AQUI:
+    query = select(User).filter(User.id == user_id)
+    result = await db.execute(query)
+    user = result.scalar_one_or_none()
+    
     if user is None:
         raise credentials_exception
         
