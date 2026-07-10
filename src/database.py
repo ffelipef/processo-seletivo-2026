@@ -3,6 +3,8 @@ from sqlalchemy.orm import declarative_base
 from typing import AsyncGenerator
 import os
 from dotenv import load_dotenv
+from redis.asyncio import Redis
+from src.config import settings
 
 load_dotenv()
 
@@ -29,3 +31,9 @@ Base = declarative_base()
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
+
+
+async def get_redis():
+    """Yields um cliente Redis assíncrono para injeção de dependência."""
+    async with Redis.from_url(settings.REDIS_URL, decode_responses=True) as redis:
+        yield redis
