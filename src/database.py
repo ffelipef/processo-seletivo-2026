@@ -11,7 +11,7 @@ load_dotenv()
 # Usar a URL de conexão do objeto settings para consistência
 DATABASE_URL = settings.DATABASE_URL
 
-async_engine = create_async_engine(DATABASE_URL, echo=True)
+async_engine = create_async_engine(DATABASE_URL, echo=True, connect_args={"ssl": "require"})
 
 AsyncSessionLocal = async_sessionmaker(
     autocommit=False,
