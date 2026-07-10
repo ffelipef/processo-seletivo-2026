@@ -32,21 +32,25 @@ services:
       retries: 5
 
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile # Ou o caminho do seu Dockerfile do backend
     container_name: nova_sphere_web
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
-    volumes:
-      - .:/app
     ports:
       - "8000:8000"
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
+    volumes:
+      - ./src:/app/src
+    environment:
+      - POSTGRES_USER=novasphere_user
+      # ... suas outras variáveis de ambiente ...
+    
+    # 🚀 ADICIONE ESTE BLOCO EXATAMENTE AQUI:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 10s      # O Docker vai testar a saúde do backend a cada 10 segundos
+      timeout: 5s       # Se o backend demorar mais de 5 segundos para responder, falhou
+      retries: 3        # O Docker tenta 3 vezes antes de marcar o contêiner como "Unhealthy"
+      start_period: 5s  # Dá 5 segundos de carência para o FastAPI inicializar antes de começar a testar
   frontend:
     build:
       context: .
