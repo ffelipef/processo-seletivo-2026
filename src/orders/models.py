@@ -1,6 +1,6 @@
 import uuid
 from enum import Enum
-from sqlalchemy import Column, String, Numeric, ForeignKey, DateTime, func, CheckConstraint
+from sqlalchemy import Column, String, Numeric, ForeignKey, DateTime, func, CheckConstraint, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from src.database import Base
@@ -40,9 +40,11 @@ class OrderItem(Base):
     order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
     
-    # Engenharia Crítica: Preço estático daquele momento histórico da compra
+    # Preço estático daquele momento histórico da compra
     price_at_purchase = Column(Numeric(10, 2), nullable=False)
-    quantity = Column(Integer := Column(Numeric), nullable=False) # Fallback seguro ou Integer direto do sqlalchemy
+    
+    # 🚀 SINTAXE CORRIGIDA AQUI:
+    quantity = Column(Integer, nullable=False)
 
     order = relationship("Order", back_populates="items", lazy="raise")
     product = relationship("Product", lazy="raise")
