@@ -47,6 +47,24 @@ services:
       redis:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: nova_sphere_frontend
+    volumes:
+      - ./novasphere-frontend:/app
+      # Para evitar reinstalar node_modules em cada reconstrução, você pode usar um volume
+      # Ex: - node_modules_frontend:/app/node_modules
+      # e adicionar 'node_modules_frontend:' em 'volumes:' abaixo.
+      # Por enquanto, o Docker irá criar um volume anônimo para /app/node_modules
+    ports:
+      - "3000:3000"
+    command: npm run dev -- --host 0.0.0.0 --port 3000
+    depends_on:
+      web:
+        condition: service_healthy
+
 volumes:
   db_data:
   redis_data:

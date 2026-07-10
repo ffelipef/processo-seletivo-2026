@@ -1,0 +1,21 @@
+# Use a imagem oficial do Node.js para o frontend
+FROM node:20-alpine
+
+# Define o diretório de trabalho dentro do container
+WORKDIR /app
+
+# Copia os arquivos de configuração de pacotes (package.json e package-lock.json)
+# para aproveitar o cache do Docker. Se estes arquivos mudarem, os packages serão reinstalados.
+COPY novasphere-frontend/package*.json ./
+
+# Instala as dependências do Node.js
+RUN npm install
+
+# Copia todo o código da aplicação frontend
+COPY novasphere-frontend .
+
+# Expõe a porta que o Vite irá rodar (padrão para desenvolvimento)
+EXPOSE 3000
+
+# Comando para iniciar o servidor de desenvolvimento do Vite
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
