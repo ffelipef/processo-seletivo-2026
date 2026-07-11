@@ -52,13 +52,13 @@ async def login_for_access_token(user_login: schemas.UserLogin, db: AsyncSession
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/me", response_model=schemas.UserResponse)
-async def read_users_me(current_user: models.User = Depends(utils.get_current_active_user)):
+async def read_users_me(current_user: models.User = Depends(utils.get_current_user)):
     return current_user
 
 @router.put("/me", response_model=schemas.UserResponse)
 async def update_user_me(
     user_update: schemas.UserCreate, # Reaproveitando o schema para validação de dados
-    current_user: models.User = Depends(utils.get_current_active_user),
+    current_user: models.User = Depends(utils.get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     # UC02 - Editar Usuário
@@ -92,7 +92,7 @@ async def promote_to_admin(
 @router.delete("/account/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user_account(
     user_id: UUID,
-    current_user: models.User = Depends(utils.get_current_active_user),
+    current_user: models.User = Depends(utils.get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     # UC06 - Deletar conta (Validação de permissão)
