@@ -11,3 +11,6 @@ COPY ./certs/server.key /var/lib/postgresql/ssl/server.key
 # Garante o dono e a permissão estrita exigida pelo Postgres (u=rw)
 RUN chown -R postgres:postgres /var/lib/postgresql/ssl && \
     chmod 600 /var/lib/postgresql/ssl/server.key
+
+#Copia o script de inicialização do banco de dados
+COPY init-scripts/init.sql /docker-entrypoint-initdb.d/

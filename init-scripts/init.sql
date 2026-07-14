@@ -1,0 +1,1 @@
+CREATE DATABASE "novasphere_test_db";
