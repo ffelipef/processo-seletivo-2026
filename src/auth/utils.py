@@ -3,6 +3,7 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 import bcrypt # Importação do bcrypt
+import uuid
 
 from src.database import get_db # Certifique-se de que sua factory de sessão chama-se get_db
 from src.config import settings
@@ -42,6 +43,27 @@ def decode_access_token(token: str) -> dict:
             detail="Não foi possível validar as credenciais",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+async def seed_initial_admin(db: AsyncSession):
+    # Verifica se já existe qualquer usuário no banco
+    query = select(User)
+    result = await db.execute(query)
+    if result.scalars().first() is None:
+        # Puxa credenciais seguras definidas no settings/config
+        admin_name = getattr(settings, "FIRST_ADMIN_NAME", "Admin NovaSphere")
+        admin_email = getattr(settings, "FIRST_ADMIN_EMAIL", "admin@novasphere.com")
+        admin_password = getattr(settings, "FIRST_ADMIN_PASSWORD", "admin123")
+        
+        admin = User(
+            id=uuid.uuid4(),
+            name=admin_name,
+            email=admin_email,
+            password_hash=get_password_hash(admin_password),
+            is_admin=True
+        )
+        db.add(admin)
+        await db.commit()
+        print(f"🚀 [SEED] Primeiro Administrador criado com sucesso: {admin.email}")
 
 # DEPENDÊNCIAS DO FASTAPI (Para proteção de rotas - UC05)
 

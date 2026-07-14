@@ -1,8 +1,15 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from pydantic import ValidationError
+from src.database import AsyncSessionLocal
+from src.auth.utils import seed_initial_admin
 import logging
+
+# 🚀 AJUSTADO PARA OS NOMES REAIS DO SEU DATABASE.PY:
+from src.database import async_engine as engine 
+from src.database import Base
 
 from src.auth.routes import router as auth_router
 from src.catalog.routes import router as catalog_router
@@ -13,10 +20,25 @@ from src.orders.routes import router as orders_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# O lifespan permanece o mesmo, agora usando o 'engine' apelidado corretamente
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Inicializando o banco de dados e criando tabelas...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Tabelas verificadas/criadas com sucesso.")
+    
+    # Executa o seed de admin se o banco estiver vazio
+    async with AsyncSessionLocal() as session:
+        await seed_initial_admin(session)
+        
+    yield
+
 app = FastAPI(
     title="NOVA Sphere API",
     description="Backend para a plataforma de e-commerce NOVA Sphere.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.include_router(auth_router)

@@ -2,21 +2,28 @@ version: '3.8'
 
 services:
   db:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.db
     container_name: nova_sphere_db
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-novasphere_prod_db}
-      POSTGRES_USER: ${POSTGRES_USER:-user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      # Agora o Docker Compose puxa direto do .env sem margem para confusão
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
+    command: [
+      "postgres",
+      "-c", "listen_addresses=*",
+      "-c", "ssl=on",
+      "-c", "ssl_cert_file=/var/lib/postgresql/ssl/server.crt",
+      "-c", "ssl_key_file=/var/lib/postgresql/ssl/server.key"
+    ]
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./certs/server.crt:/var/lib/postgresql/server.crt
-      - ./certs/server.key:/var/lib/postgresql/server.key
-    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/var/lib/postgresql/server.crt", "-c", "ssl_key_file=/var/lib/postgresql/server.key"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-novasphere_prod_db}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -54,6 +61,10 @@ services:
       timeout: 5s       # Se o backend demorar mais de 5 segundos para responder, falhou
       retries: 3        # O Docker tenta 3 vezes antes de marcar o contêiner como "Unhealthy"
       start_period: 5s  # Dá 5 segundos de carência para o FastAPI inicializar antes de começar a testar
+    
+    depends_on:
+      db:
+        condition: service_healthy
   frontend:
     build:
       context: .

@@ -1,0 +1,13 @@
+FROM postgres:16-alpine
+
+# Resolve o warning de locale instalando o suporte necessário no Alpine
+RUN apk add --no-cache musl-locales musl-locales-lang
+
+# Cria a pasta e copia os certificados aplicando as permissões Linux nativas
+RUN mkdir -p /var/lib/postgresql/ssl
+COPY ./certs/server.crt /var/lib/postgresql/ssl/server.crt
+COPY ./certs/server.key /var/lib/postgresql/ssl/server.key
+
+# Garante o dono e a permissão estrita exigida pelo Postgres (u=rw)
+RUN chown -R postgres:postgres /var/lib/postgresql/ssl && \
+    chmod 600 /var/lib/postgresql/ssl/server.key
