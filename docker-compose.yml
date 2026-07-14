@@ -116,6 +116,19 @@ services:
       sonar_db:
         condition: service_healthy
 
+  sonar-scanner:
+    image: sonarsource/sonar-scanner-cli:latest
+    container_name: nova_sphere_sonar_scanner
+    volumes:
+      - .:/usr/src # Mapeia a raiz do seu projeto para dentro do scanner
+    environment:
+      - SONAR_HOST_URL=http://sonarqube:9000 # URL interna do Sonar dentro da rede do Docker
+      - SONAR_TOKEN=${SONAR_TOKEN} # Token do Sonar, que você deve definir no seu .env
+    depends_on:
+      - sonarqube # Garante que o scanner só roda se o painel do Sonar estiver de pé
+    networks:
+      - default # Garante que ele está na mesma rede dos outros contêineres para conseguir enviar os dados
+
 volumes:
   db_data:
   redis_data:
