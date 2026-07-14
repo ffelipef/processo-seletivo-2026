@@ -1,18 +1,20 @@
 from datetime import datetime, timedelta, timezone
 import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-import bcrypt # Importação do bcrypt
+# 1. Troque OAuth2PasswordBearer por HTTPBearer e HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import bcrypt 
 import uuid
 
-from src.database import get_db # Certifique-se de que sua factory de sessão chama-se get_db
+from src.database import get_db 
 from src.config import settings
 from src.auth.models import User
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-# Configuração de segurança
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+
+# 2. Configure a segurança para Bearer Token puro
+security_scheme = HTTPBearer()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
@@ -67,19 +69,28 @@ async def seed_initial_admin(db: AsyncSession):
 
 # DEPENDÊNCIAS DO FASTAPI (Para proteção de rotas - UC05)
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
+async def get_current_user(
+    token: HTTPAuthorizationCredentials = Depends(security_scheme), 
+    db: AsyncSession = Depends(get_db)
+) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Token inválido ou expirado",
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    payload = decode_access_token(token)
-    user_id: str = payload.get("sub")
-    if user_id is None:
+    # 4. Extraia a string de token de dentro do objeto do FastAPI
+    token_string = token.credentials
+    
+    try:
+        payload = decode_access_token(token_string)
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except Exception:
         raise credentials_exception
     
-    # 🚀 BUSCA ASSÍNCRONA CORRIGIDA AQUI:
+    # BUSCA ASSÍNCRONA CORRIGIDA AQUI:
     query = select(User).filter(User.id == user_id)
     result = await db.execute(query)
     user = result.scalar_one_or_none()
