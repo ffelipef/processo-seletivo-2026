@@ -13,6 +13,7 @@ class Product(Base):
     stock = Column(Integer, default=0, nullable=False)
     category = Column(String(50), index=True, nullable=False)
     image_url = Column(String(255), nullable=True)
+    is_retro = Column(Boolean, default=False)
     
     # Diferencial Oficial: Soft Delete para integridade histórica
     is_deleted = Column(Boolean, default=False, nullable=False)

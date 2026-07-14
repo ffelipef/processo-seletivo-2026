@@ -11,6 +11,7 @@ class ProductBase(BaseModel):
     stock: int = Field(..., ge=0, description="Quantidade em estoque (não pode ser negativa)")
     category: str = Field(..., min_length=2, max_length=50, description="Categoria do produto")
     image_url: Optional[str] = Field(None, max_length=255, description="URL da imagem do produto")
+    is_retro: bool = Field(False, description="Indica se o produto é retrô (True) ou não (False)")
 
 # Schema para criação e atualização completa (Admin - UC07)
 class ProductCreate(ProductBase):
