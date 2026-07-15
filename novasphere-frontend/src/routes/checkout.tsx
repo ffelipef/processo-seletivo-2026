@@ -1,9 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useStore } from "@/lib/store"; // Importar useStore
 import { DotBadge } from "@/components/icons/NovaIcons";
 import { toast } from "sonner";
-import { checkoutOrder } from '../services/api'; // Importar a função de API diretamente
+// Removido importação direta de checkoutOrder, pois agora virá do store
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/checkout")({
 });
 
 function CheckoutPage() {
-  const { cart, products, auth, clearCart } = useStore(); // Adicionado clearCart do store
+  const { cart, products, auth, checkout } = useStore(); // Recupera a função checkout do store
   const nav = useNavigate();
   const [busy, setBusy] = useState(false);
 
@@ -27,19 +27,19 @@ function CheckoutPage() {
     }
     setBusy(true);
     try {
-      // Chama a API de checkout diretamente
-      const res = await checkoutOrder();
+      // Chama a função de checkout do store
+      const res = await checkout();
       
       toast.success(`Pedido #${res.order_id.substring(0, 8)} criado com status PENDENTE.`);
       
       // Redireciona para a rota de sucesso com o orderId
-      nav({ to: "/success", search: { orderId: res.order_id } }); // Alterado para orderId
+      nav({ to: "/success", search: { orderId: res.order_id } });
       
-      // Não limpa o carrinho aqui, a limpeza ocorrerá na página de sucesso se o pagamento for aprovado.
+      // A limpeza do carrinho ocorrerá na página de sucesso se o pagamento for aprovado.
 
     } catch (err: any) {
       console.error("Erro no checkout:", err);
-      const errorMessage = err.response?.data?.detail || err?.message || "Checkout failed";
+      const errorMessage = err.message || "Checkout failed"; // erro.response?.data?.detail não está disponível com fetch
       toast.error(errorMessage);
     } finally {
       setBusy(false);
