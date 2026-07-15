@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { DotBadge } from "@/components/icons/NovaIcons";
 import { toast } from "sonner";
+import { checkoutOrder } from '../services/api'; // Importar a função de API diretamente
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -15,18 +16,31 @@ export const Route = createFileRoute("/checkout")({
 });
 
 function CheckoutPage() {
-  const { cart, products, checkout, auth } = useStore();
+  const { cart, products, auth, clearCart } = useStore(); // Adicionado clearCart do store
   const nav = useNavigate();
   const [busy, setBusy] = useState(false);
 
   async function onCheckout() {
-    if (cart.items.length === 0) return;
+    if (cart.items.length === 0) {
+      toast.error("Seu carrinho está vazio!");
+      return;
+    }
     setBusy(true);
     try {
-      const res = await checkout();
-      nav({ to: "/success", search: { order: res.order_id, total: res.total } });
+      // Chama a API de checkout diretamente
+      const res = await checkoutOrder();
+      
+      toast.success(`Pedido #${res.order_id.substring(0, 8)} criado com status PENDENTE.`);
+      
+      // Redireciona para a rota de sucesso com o orderId
+      nav({ to: "/success", search: { orderId: res.order_id } }); // Alterado para orderId
+      
+      // Não limpa o carrinho aqui, a limpeza ocorrerá na página de sucesso se o pagamento for aprovado.
+
     } catch (err: any) {
-      toast.error(err?.message ?? "Checkout failed");
+      console.error("Erro no checkout:", err);
+      const errorMessage = err.response?.data?.detail || err?.message || "Checkout failed";
+      toast.error(errorMessage);
     } finally {
       setBusy(false);
     }

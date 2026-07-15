@@ -16,21 +16,34 @@ def get_order_service() -> OrderService:
 
 @router.post("/checkout", response_model=schemas.CheckoutResponse, status_code=status.HTTP_201_CREATED)
 async def create_order_checkout(
-    current_user: User = Depends(get_current_user), # UC16 / UC17
+    current_user: User = Depends(get_current_user), # UC16 - Finalizar Compra
     db: AsyncSession = Depends(get_db),
     service: OrderService = Depends(get_order_service)
 ):
     """
     Processa o carrinho ativo do usuário logado, valida o estoque de cada item,
-    conclui a venda dando a baixa real e simula a aprovação imediata do pagamento.
+    cria o pedido com status PENDING e limpa o carrinho.
     """
     return await service.checkout(current_user.id, db)
+
+@router.get("/{order_id}", response_model=schemas.OrderResponse) # Novo endpoint para detalhes de um pedido
+async def get_single_order_details(
+    order_id: UUID,
+    current_user: User = Depends(get_current_user), # UC14 - Visualizar Detalhes do Pedido
+    db: AsyncSession = Depends(get_db),
+    service: OrderService = Depends(get_order_service)
+):
+    """Retorna os detalhes de um pedido específico do usuário autenticado."""
+    order = await service.get_order_by_id_for_user(order_id, current_user.id, db)
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado ou você não tem permissão para vê-lo.")
+    return order
 
 @router.post("/{order_id}/simulate-payment", response_model=schemas.PaymentSimulationResponse)
 async def simulate_payment_webhook(
     order_id: UUID,
     payment_in: schemas.PaymentSimulationRequest, # UC17 - Simular Pagamento
-    current_user: User = Depends(get_current_admin_user), # Apenas admin pode simular pagamentos
+    current_user: User = Depends(get_current_user), # Permitir que o próprio usuário simule o pagamento do seu pedido
     db: AsyncSession = Depends(get_db),
     service: OrderService = Depends(get_order_service)
 ):
@@ -38,7 +51,7 @@ async def simulate_payment_webhook(
     Simula o resultado de um pagamento para um pedido.
     Altera o status do pedido para PAID ou FAILED e ajusta o estoque se for FAILED.
     """
-    updated_order = await service.handle_payment_status(order_id, payment_in.status, db)
+    updated_order = await service.handle_payment_status(order_id, payment_in.status, current_user.id, db) # Passar user_id
     
     return schemas.PaymentSimulationResponse(
         message=f"Status do pedido atualizado para {updated_order.status}.",

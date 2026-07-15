@@ -103,7 +103,16 @@ class OrderService:
                 total_price=float(new_order.total_price) # Alterado para total_price
             )
 
-    async def handle_payment_status(self, order_id: UUID, payment_status: str, db: AsyncSession) -> Order:
+    async def get_order_by_id_for_user(self, order_id: UUID, user_id: UUID, db: AsyncSession) -> Order | None:
+        """Retorna os detalhes de um pedido específico para um usuário, garantindo que o usuário seja o dono."""
+        query = (
+            select(Order)
+            .filter(Order.id == order_id, Order.user_id == user_id)
+            .options(selectinload(Order.items).selectinload(OrderItem.product))
+        )
+        return (await db.execute(query)).scalar_one_or_none()
+
+    async def handle_payment_status(self, order_id: UUID, payment_status: str, current_user_id: UUID, db: AsyncSession) -> Order:
         """
         UC17 - Simular Pagamento:
         Atualiza o status do pedido e ajusta o estoque em caso de falha/cancelamento.
@@ -115,6 +124,10 @@ class OrderService:
             if not order:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
 
+            # Autorização: Apenas o dono do pedido pode simular/alterar o status
+            if order.user_id != current_user_id:
+                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Você não tem permissão para alterar o status deste pedido.")
+
             if order.status != OrderStatus.PENDING:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -123,24 +136,19 @@ class OrderService:
 
             if payment_status == "success":
                 order.status = OrderStatus.PAID
-                message = "Pagamento aprovado com sucesso."
             elif payment_status == "fail":
                 order.status = OrderStatus.FAILED
-                message = "Pagamento falhou. Pedido cancelado e estoque devolvido."
                 
                 # Devolve o estoque para cada produto
                 for item in order.items:
                     if item.product: # Garante que o produto ainda existe
                         item.product.stock += item.quantity
-                        # Não é necessário db.add(item.product) pois o objeto já está rastreado
                     else:
-                        # Log ou aviso se o produto original não for encontrado
-                        print(f"Produto {item.product_id} do pedido {order_id} não encontrado para devolução de estoque.")
+                        print(f"⚠️ Alerta: Produto {item.product_id} do pedido {order_id} não encontrado para devolução de estoque. Estoque pode estar inconsistente.")
             else:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Status de pagamento inválido.")
 
             order.updated_at = datetime.now(timezone.utc) # Atualiza o timestamp
-            # db.add(order) # Não necessário, objeto já rastreado
             await db.refresh(order) # Atualiza o objeto para pegar o status mais recente
 
             return order # Retorna o pedido atualizado
