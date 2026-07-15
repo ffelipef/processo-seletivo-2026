@@ -1,3 +1,4 @@
+from datetime import datetime, timezone # Importações adicionadas
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
+from uuid import UUID # Importação adicionada
 
 from src.database import get_db
 from src.orders import schemas
