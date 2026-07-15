@@ -1,34 +1,66 @@
-import axios from 'axios';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-// Configuração base do Axios. Assuma que a URL base é definida via variável de ambiente ou um arquivo de config
-// Exemplo: process.env.VITE_API_BASE_URL no Vite ou .env
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'; // Ajuste conforme seu backend
-const api = axios.create({
-    baseURL: API_BASE_URL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
-});
+function getToken(): string | null {
+  return localStorage.getItem("token"); // Assumindo que o token é armazenado no localStorage
+}
 
-// Interceptor para adicionar o token JWT
-api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('token'); // Assumindo que o token é armazenado no localStorage
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => {
-        return Promise.reject(error);
-    }
-);
+export interface ApiError {
+  status: number;
+  message: string;
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init.headers as Record<string, string> | undefined),
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try {
+      const j = await res.json();
+      if (Array.isArray(j.detail)) {
+        msg = j.detail.map((err: any) => {
+          const field = err.loc ? err.loc.filter((l: any) => l !== "body").join(".") : "";
+          return field ? `${field}: ${err.msg}` : err.msg;
+        }).join(" | ");
+      } else if (typeof j.detail === "string") {
+        msg = j.detail;
+      } else {
+        msg = j.message || msg;
+      }
+    } catch {}
+    
+    const err: ApiError = { status: res.status, message: msg };
+    throw err;
+  }
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
 
 // --- Tipos para o Frontend (Replicando schemas do backend para consistência) ---
 // Estes tipos podem ser movidos para um arquivo 'types/api.ts' se o projeto crescer
 
 export type OrderStatus = 'pending' | 'paid' | 'failed' | 'canceled';
 
+// Auth Schemas
+export interface Token {
+    access_token: string;
+    token_type: string;
+}
+
+export interface UserResponse {
+    id: string; // UUID do backend
+    name: string;
+    email: string;
+    is_admin: boolean;
+    created_at: string; // ISO string
+}
+
+// Cart Schemas
 export interface CartItemAdd {
     product_id: string;
     quantity: number;
@@ -88,49 +120,60 @@ export interface PaymentSimulationResponse {
 
 // Cart
 export const getMyCart = async (): Promise<CartResponse> => {
-    const response = await api.get('/cart');
-    return response.data;
+    return request<CartResponse>('/cart');
 };
 
 export const addItemToCart = async (item: CartItemAdd): Promise<CartItemResponse> => {
-    const response = await api.post('/cart/items', item);
-    return response.data;
+    return request<CartItemResponse>('/cart/items', {
+        method: 'POST',
+        body: JSON.stringify(item),
+    });
 };
 
 export const updateCartItemQuantity = async (itemId: string, quantity: number): Promise<CartItemResponse> => {
-    const response = await api.put(`/cart/items/${itemId}`, { quantity });
-    return response.data;
+    return request<CartItemResponse>(`/cart/items/${itemId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ quantity }),
+    });
 };
 
 export const removeCartItem = async (itemId: string): Promise<void> => {
-    await api.delete(`/cart/items/${itemId}`);
+    return request<void>(`/cart/items/${itemId}`, {
+        method: 'DELETE',
+    });
 };
 
 // Orders
 export const checkoutOrder = async (): Promise<CheckoutResponse> => {
-    const response = await api.post('/orders/checkout');
-    return response.data;
+    return request<CheckoutResponse>('/orders/checkout', {
+        method: 'POST',
+    });
 };
 
 export const getOrderDetails = async (orderId: string): Promise<OrderResponse> => {
-    const response = await api.get(`/orders/${orderId}`);
-    return response.data;
+    return request<OrderResponse>(`/orders/${orderId}`);
 };
 
 export const simulatePayment = async (orderId: string, status: 'success' | 'fail'): Promise<PaymentSimulationResponse> => {
-    const response = await api.post(`/orders/${orderId}/simulate-payment`, { status });
-    return response.data;
+    return request<PaymentSimulationResponse>(`/orders/${orderId}/simulate-payment`, {
+        method: 'POST',
+        body: JSON.stringify({ status }),
+    });
 };
 
-// Autenticação (Exemplo - ajuste conforme seu AuthService)
-export const loginUser = async (credentials: any): Promise<{ access_token: string }> => {
-    const response = await api.post('/auth/login', credentials);
-    return response.data;
+// Autenticação
+export const loginUser = async (credentials: any): Promise<Token> => {
+    return request<Token>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(credentials),
+    });
 };
 
-export const registerUser = async (userData: any): Promise<any> => {
-    const response = await api.post('/auth/register', userData);
-    return response.data;
+export const registerUser = async (userData: any): Promise<UserResponse> => {
+    return request<UserResponse>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(userData),
+    });
 };
 
 // Outras funções de API (Catálogo, Admin, etc.) seriam adicionadas aqui.
