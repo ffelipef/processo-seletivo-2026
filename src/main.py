@@ -5,9 +5,9 @@ from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from pydantic import ValidationError
 from src.database import AsyncSessionLocal
 from src.auth.utils import seed_initial_admin
+from fastapi.middleware.cors import CORSMiddleware
 import logging
 
-# 🚀 AJUSTADO PARA OS NOMES REAIS DO SEU DATABASE.PY:
 from src.database import async_engine as engine 
 from src.database import Base
 
@@ -39,6 +39,21 @@ app = FastAPI(
     description="Backend para a plataforma de e-commerce NOVA Sphere.",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth_router)

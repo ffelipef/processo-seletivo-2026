@@ -71,6 +71,7 @@ services:
     container_name: nova_sphere_frontend
     volumes:
       - ./novasphere-frontend:/app
+      - /app/node_modules
       # Para evitar reinstalar node_modules em cada reconstrução, você pode usar um volume
       # Ex: - node_modules_frontend:/app/node_modules
       # e adicionar 'node_modules_frontend:' em 'volumes:' abaixo.

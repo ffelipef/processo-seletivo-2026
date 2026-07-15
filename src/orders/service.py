@@ -17,7 +17,7 @@ class OrderService:
         UC16 - Finalizar Compra.
         Processa o carrinho, reduz estoque atomicamente, limpa o carrinho e gera o pedido com status PENDING.
         """
-        async with db.begin(): # Garante atomicidade da transação
+        try:
             # 1. Busca todos os itens do carrinho do usuário com os dados do produto, COM LOCK PESSIMISTA
             cart_query = (
                 select(CartItem)
@@ -62,7 +62,6 @@ class OrderService:
 
                 # Executa a baixa real no estoque do produto
                 product.stock -= item.quantity
-                # Não é necessário db.add(product) aqui, pois o objeto já está rastreado pela sessão e `with_for_update`
 
                 # Calcula o valor total acumulado
                 total_price += float(product.price * item.quantity)
@@ -79,10 +78,10 @@ class OrderService:
             new_order = Order(
                 user_id=user_id,
                 total_price=total_price,
-                status=OrderStatus.PENDING # Status inicial PENDING
+                status=OrderStatus.PENDING
             )
             db.add(new_order)
-            await db.flush()  # Executa o flush para gerar o ID do pedido antes de salvar os filhos
+            await db.flush()
 
             # Vincular os itens ao pedido criado
             for order_item in order_items_to_create:
@@ -93,15 +92,18 @@ class OrderService:
             for item in cart_items:
                 await db.delete(item)
 
-            # O commit é feito automaticamente ao sair do bloco `async with db.begin():`
+            await db.commit()
             await db.refresh(new_order)
 
             return CheckoutResponse(
                 message="Pedido criado com sucesso! Aguardando pagamento.",
                 order_id=new_order.id,
                 status=new_order.status,
-                total_price=float(new_order.total_price) # Alterado para total_price
+                total_price=float(new_order.total_price)
             )
+        except Exception:
+            await db.rollback()
+            raise
 
     async def get_order_by_id_for_user(self, order_id: UUID, user_id: UUID, db: AsyncSession) -> Order | None:
         """Retorna os detalhes de um pedido específico para um usuário, garantindo que o usuário seja o dono."""
@@ -117,7 +119,7 @@ class OrderService:
         UC17 - Simular Pagamento:
         Atualiza o status do pedido e ajusta o estoque em caso de falha/cancelamento.
         """
-        async with db.begin(): # Garante atomicidade da transação
+        try:
             query = select(Order).filter(Order.id == order_id).options(selectinload(Order.items).selectinload(OrderItem.product)).with_for_update()
             order = (await db.execute(query)).scalar_one_or_none()
 
@@ -141,17 +143,21 @@ class OrderService:
                 
                 # Devolve o estoque para cada produto
                 for item in order.items:
-                    if item.product: # Garante que o produto ainda existe
+                    if item.product:
                         item.product.stock += item.quantity
                     else:
                         print(f"⚠️ Alerta: Produto {item.product_id} do pedido {order_id} não encontrado para devolução de estoque. Estoque pode estar inconsistente.")
             else:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Status de pagamento inválido.")
 
-            order.updated_at = datetime.now(timezone.utc) # Atualiza o timestamp
-            await db.refresh(order) # Atualiza o objeto para pegar o status mais recente
+            order.updated_at = datetime.now(timezone.utc)
+            await db.commit()
+            await db.refresh(order)
 
-            return order # Retorna o pedido atualizado
+            return order
+        except Exception:
+            await db.rollback()
+            raise
 
     async def get_user_orders(self, user_id: UUID, db: AsyncSession) -> list[Order]:
         """UC14 - Visualizar Histórico de Pedidos (Cliente)."""

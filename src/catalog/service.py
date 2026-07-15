@@ -21,9 +21,12 @@ class CatalogService:
         """Remove todas as chaves de cache do catálogo para garantir consistência após alterações."""
         # Como temos filtros dinâmicos, o jeito mais seguro é deletar as chaves do catálogo
         # Em produção, gerenciaríamos chaves de paginação específicas, mas o flush/delete por padrão resolve aqui
-        keys = await self.redis.keys(f"{CACHE_KEY_PREFIX}:*")
-        if keys:
-            await self.redis.delete(*keys)
+        try:
+            keys = await self.redis.keys(f"{CACHE_KEY_PREFIX}:*")
+            if keys:
+                await self.redis.delete(*keys)
+        except Exception as e:
+            logger.warning(f"⚠️ Redis indisponível ao invalidar cache: {e}. Cache pode ficar temporariamente desatualizado, mas a operação principal seguirá normalmente.")
 
     async def create_product(self, product_in: ProductCreate, db: AsyncSession) -> Product:
         # UC07 - Criar Produto (Admin)
