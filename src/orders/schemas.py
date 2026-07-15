@@ -34,4 +34,12 @@ class CheckoutResponse(BaseModel):
     message: str
     order_id: UUID
     status: OrderStatus
-    total_paid: float
+    total_price: float # Alterado para total_price para refletir o status PENDING inicial
+
+class PaymentSimulationRequest(BaseModel):
+    status: str = Field(..., pattern="^(success|fail)$", description="Resultado da simulação de pagamento: 'success' ou 'fail'")
+
+class PaymentSimulationResponse(BaseModel):
+    message: str
+    order_id: UUID
+    new_status: OrderStatus

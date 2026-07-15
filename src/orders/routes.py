@@ -25,6 +25,26 @@ async def create_order_checkout(
     """
     return await service.checkout(current_user.id, db)
 
+@router.post("/{order_id}/simulate-payment", response_model=schemas.PaymentSimulationResponse)
+async def simulate_payment_webhook(
+    order_id: UUID,
+    payment_in: schemas.PaymentSimulationRequest, # UC17 - Simular Pagamento
+    current_user: User = Depends(get_current_admin_user), # Apenas admin pode simular pagamentos
+    db: AsyncSession = Depends(get_db),
+    service: OrderService = Depends(get_order_service)
+):
+    """
+    Simula o resultado de um pagamento para um pedido.
+    Altera o status do pedido para PAID ou FAILED e ajusta o estoque se for FAILED.
+    """
+    updated_order = await service.handle_payment_status(order_id, payment_in.status, db)
+    
+    return schemas.PaymentSimulationResponse(
+        message=f"Status do pedido atualizado para {updated_order.status}.",
+        order_id=updated_order.id,
+        new_status=updated_order.status
+    )
+
 @router.get("", response_model=List[schemas.OrderResponse])
 async def list_user_orders(
     current_user: User = Depends(get_current_user), # UC14 - Histórico do Cliente
