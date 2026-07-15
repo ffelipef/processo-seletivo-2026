@@ -1,8 +1,11 @@
 import json
+import logging # Importar o módulo logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from redis.asyncio import Redis
 from uuid import UUID
+
+logger = logging.getLogger(__name__) # Inicializar o logger
 
 from src.catalog.models import Product
 from src.catalog.schemas import ProductCreate, ProductResponse
@@ -41,9 +44,15 @@ class CatalogService:
         cache_key = f"{CACHE_KEY_PREFIX}:page:{page}:size:{size}:cat:{category}:min:{min_price}:max:{max_price}:name:{name}"
         
         # Tenta buscar no Redis primeiro
-        cached_data = await self.redis.get(cache_key)
-        if cached_data:
-            return json.loads(cached_data) # Retorno instantâneo em caso de cache hit
+        cached_data = None
+        try:
+            cached_data = await self.redis.get(cache_key)
+            if cached_data:
+                logger.info(f"✅ Cache hit para {cache_key}")
+                return json.loads(cached_data) # Retorno instantâneo em caso de cache hit
+        except Exception as e:
+            logger.warning(f"⚠️ Redis indisponível ou erro ao ler cache '{cache_key}': {e}. Buscando do banco de dados...")
+            # cached_data permanece None, o fluxo continuará buscando do banco
 
         # Cache Miss: Se não estiver no Redis, constrói a query no Postgres
         offset = (page - 1) * size
@@ -81,8 +90,12 @@ class CatalogService:
         }
 
         # Salva o resultado no Redis para as próximas requisições parecidas
-        await self.redis.setex(cache_key, CACHE_EXPIRE_SECONDS, json.dumps(response_data, default=str))
-        
+        try:
+            await self.redis.setex(cache_key, CACHE_EXPIRE_SECONDS, json.dumps(response_data, default=str))
+            logger.info(f"💾 Dados salvos no cache para {cache_key}")
+        except Exception as e:
+            logger.warning(f"⚠️ Redis indisponível ou erro ao salvar cache '{cache_key}': {e}. A requisição será processada sem cache.")
+            
         return response_data
 
     async def soft_delete_product(self, product_id: UUID, db: AsyncSession) -> bool:
