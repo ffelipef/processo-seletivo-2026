@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from redis.asyncio import Redis
 from uuid import UUID
+from src.cache import redis_client as cache
 
 logger = logging.getLogger(__name__) # Inicializar o logger
 
@@ -115,3 +116,9 @@ class CatalogService:
         # Requisito Obrigatório: Invalidar cache ao remover
         await self._invalidate_catalog_cache()
         return True
+    
+    async def invalidate_cache(self):
+        """Limpa todas as chaves do catálogo no Redis"""
+        keys = await self.redis.keys(f"{CACHE_KEY_PREFIX}:*")
+        if keys:
+            await self.redis.delete(*keys)

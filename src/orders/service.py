@@ -1,24 +1,89 @@
-from datetime import datetime, timezone # Importações adicionadas
+from asyncio.log import logger
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 from uuid import UUID
+from decimal import Decimal
 
-from src.orders.models import Order, OrderItem, OrderStatus
-from src.orders.schemas import CheckoutResponse, OrderResponse
+from src.orders.models import Order, OrderItem, OrderStatus, Coupon, CouponUsage, DiscountType
+from src.orders.schemas import CheckoutResponse, OrderResponse, CouponValidateResponse
 from src.cart.models import CartItem
 from src.catalog.models import Product
 
+
 class OrderService:
 
-    async def checkout(self, user_id: UUID, db: AsyncSession) -> CheckoutResponse:
+    async def _validate_and_calculate_coupon(
+        self, user_id: UUID, coupon_code: str, subtotal: Decimal, db: AsyncSession
+    ) -> tuple[Coupon, Decimal]:
+        """
+        Fonte única de verdade para validação e cálculo de desconto de cupom.
+        Usado tanto pelo checkout real quanto pelo preview (/coupons/validate).
+        """
+        coupon_query = select(Coupon).where(Coupon.code == coupon_code)
+        coupon = (await db.execute(coupon_query)).scalar_one_or_none()
+
+        if not coupon or not coupon.is_active:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cupom inválido ou inativo.")
+
+        if coupon.expires_at and coupon.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Este cupom já expirou.")
+
+        if subtotal < coupon.min_order_value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"O valor mínimo para este cupom é R$ {coupon.min_order_value}"
+            )
+
+        usage_query = select(CouponUsage).where(
+            CouponUsage.user_id == user_id, CouponUsage.coupon_id == coupon.id
+        )
+        if (await db.execute(usage_query)).scalar_one_or_none():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Você já utilizou este cupom.")
+
+        if coupon.discount_type == DiscountType.percentage:
+            discount_amount = subtotal * (coupon.discount_value / Decimal("100.0"))
+        else:
+            discount_amount = coupon.discount_value
+
+        discount_amount = min(discount_amount, subtotal)
+        return coupon, discount_amount
+
+    async def validate_coupon(self, user_id: UUID, coupon_code: str, db: AsyncSession) -> CouponValidateResponse:
+        """Calcula o desconto de um cupom para o carrinho atual, sem criar pedido nem travar estoque."""
+        cart_query = (
+            select(CartItem)
+            .filter(CartItem.user_id == user_id)
+            .options(selectinload(CartItem.product))
+        )
+        cart_items = (await db.execute(cart_query)).scalars().all()
+
+        if not cart_items:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Carrinho vazio.")
+
+        subtotal = sum(
+            (item.product.price * item.quantity for item in cart_items if item.product),
+            Decimal("0.0")
+        )
+
+        _, discount_amount = await self._validate_and_calculate_coupon(user_id, coupon_code, subtotal, db)
+
+        return CouponValidateResponse(
+            valid=True,
+            subtotal=float(subtotal),
+            discount_amount=float(discount_amount),
+            total_price=float(subtotal - discount_amount),
+        )
+
+    async def checkout(self, user_id: UUID, db: AsyncSession, coupon_code: str = None) -> CheckoutResponse:
         """
         UC16 - Finalizar Compra.
-        Processa o carrinho, reduz estoque atomicamente, limpa o carrinho e gera o pedido com status PENDING.
+        Processa o carrinho, reduz estoque, aplica cupons e gera o pedido.
         """
         try:
-            # 1. Busca todos os itens do carrinho do usuário com os dados do produto, COM LOCK PESSIMISTA
             cart_query = (
                 select(CartItem)
                 .filter(CartItem.user_id == user_id)
@@ -28,45 +93,37 @@ class OrderService:
 
             if not cart_items:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Não é possível finalizar um pedido com o carrinho vazio"
                 )
 
-            total_price = 0.0
+            total_price = Decimal("0.0")
             order_items_to_create = []
-            
-            # Para garantir o lock pessimista nos produtos
+
             product_ids = [item.product_id for item in cart_items]
-            # SELECT ... FOR UPDATE nos produtos para travar o estoque
             locked_products_query = select(Product).filter(Product.id.in_(product_ids)).with_for_update()
             locked_products_result = await db.execute(locked_products_query)
             locked_products = {p.id: p for p in locked_products_result.scalars().all()}
 
-            # 2. Varre os itens validando estoque e calculando valores históricos
             for item in cart_items:
                 product = locked_products.get(item.product_id)
-                
-                # Garante que o produto existe e não foi deletado no meio do processo
+
                 if not product or product.is_deleted:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"O produto '{item.product.name if item.product else 'desconhecido'}' não está mais disponível no catálogo."
                     )
 
-                # Validação crítica de estoque antes da baixa
                 if product.stock < item.quantity:
+                    logger.error(f"Estoque insuficiente! Produto: {product.name}, Pedido: {item.quantity}, Estoque: {product.stock}")
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Estoque insuficiente para o produto '{product.name}'. Disponível: {product.stock}"
+                        detail=f"Estoque insuficiente para '{product.name}'. Pedido: {item.quantity}, Disponível: {product.stock}"
                     )
 
-                # Executa a baixa real no estoque do produto
                 product.stock -= item.quantity
+                total_price += product.price * item.quantity
 
-                # Calcula o valor total acumulado
-                total_price += float(product.price * item.quantity)
-
-                # Instancia o item do pedido com o preço congelado daquele instante
                 order_item = OrderItem(
                     product_id=product.id,
                     price_at_purchase=product.price,
@@ -74,7 +131,14 @@ class OrderService:
                 )
                 order_items_to_create.append(order_item)
 
-            # 3. Cria a entidade do Pedido principal (Status inicial PENDING)
+            # Validação de cupom — usa o mesmo método do preview
+            applied_coupon = None
+            if coupon_code:
+                applied_coupon, discount_amount = await self._validate_and_calculate_coupon(
+                    user_id, coupon_code, total_price, db
+                )
+                total_price = max(Decimal("0.0"), total_price - discount_amount)
+
             new_order = Order(
                 user_id=user_id,
                 total_price=total_price,
@@ -83,17 +147,28 @@ class OrderService:
             db.add(new_order)
             await db.flush()
 
-            # Vincular os itens ao pedido criado
+            if applied_coupon:
+                new_usage = CouponUsage(
+                    user_id=user_id,
+                    coupon_id=applied_coupon.id,
+                    order_id=new_order.id
+                )
+                db.add(new_usage)
+
             for order_item in order_items_to_create:
                 order_item.order_id = new_order.id
                 db.add(order_item)
 
-            # 4. Esvazia completamente o carrinho do usuário (Limpeza pós-venda)
             for item in cart_items:
                 await db.delete(item)
 
             await db.commit()
             await db.refresh(new_order)
+            from src.catalog.service import CatalogService
+            from src.cache import redis_client
+
+            catalog_service = CatalogService(redis_client) 
+            await catalog_service.invalidate_cache()
 
             return CheckoutResponse(
                 message="Pedido criado com sucesso! Aguardando pagamento.",
@@ -106,7 +181,6 @@ class OrderService:
             raise
 
     async def get_order_by_id_for_user(self, order_id: UUID, user_id: UUID, db: AsyncSession) -> Order | None:
-        """Retorna os detalhes de um pedido específico para um usuário, garantindo que o usuário seja o dono."""
         query = (
             select(Order)
             .filter(Order.id == order_id, Order.user_id == user_id)
@@ -115,20 +189,17 @@ class OrderService:
         return (await db.execute(query)).scalar_one_or_none()
 
     async def handle_payment_status(self, order_id: UUID, payment_status: str, current_user_id: UUID, db: AsyncSession) -> Order:
-        """
-        UC17 - Simular Pagamento:
-        Atualiza o status do pedido e ajusta o estoque em caso de falha/cancelamento.
-        """
         try:
-            query = select(Order).filter(Order.id == order_id).options(selectinload(Order.items).selectinload(OrderItem.product)).with_for_update()
+            query = select(Order).filter(Order.id == order_id).options(
+                selectinload(Order.items).selectinload(OrderItem.product)
+            ).with_for_update()
             order = (await db.execute(query)).scalar_one_or_none()
 
             if not order:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
 
-            # Autorização: Apenas o dono do pedido pode simular/alterar o status
             if order.user_id != current_user_id:
-                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Você não tem permissão para alterar o status deste pedido.")
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Você não tem permissão para alterar o status deste pedido.")
 
             if order.status != OrderStatus.PENDING:
                 raise HTTPException(
@@ -140,8 +211,6 @@ class OrderService:
                 order.status = OrderStatus.PAID
             elif payment_status == "fail":
                 order.status = OrderStatus.FAILED
-                
-                # Devolve o estoque para cada produto
                 for item in order.items:
                     if item.product:
                         item.product.stock += item.quantity
@@ -160,20 +229,18 @@ class OrderService:
             raise
 
     async def get_user_orders(self, user_id: UUID, db: AsyncSession) -> list[Order]:
-        """UC14 - Visualizar Histórico de Pedidos (Cliente)."""
         query = (
             select(Order)
             .filter(Order.user_id == user_id)
-            .options(selectinload(Order.items).selectinload(OrderItem.product)) # Carrega produtos para exibição
+            .options(selectinload(Order.items).selectinload(OrderItem.product))
             .order_by(Order.created_at.desc())
         )
         return (await db.execute(query)).scalars().all()
 
     async def get_all_orders_admin(self, db: AsyncSession) -> list[Order]:
-        """UC15 - Gerenciar Pedidos da Plataforma (Admin)."""
         query = (
             select(Order)
-            .options(selectinload(Order.items).selectinload(OrderItem.product)) # Carrega produtos para exibição
+            .options(selectinload(Order.items).selectinload(OrderItem.product))
             .order_by(Order.created_at.desc())
         )
         return (await db.execute(query)).scalars().all()

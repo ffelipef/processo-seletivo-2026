@@ -1,16 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
+
+# Importações do Rate Limiter
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from src.database import get_db
 from src.auth import schemas, models, utils
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# Instancia o Limiter usando o IP do cliente como chave
+limiter = Limiter(key_func=get_remote_address)
+
 @router.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
-async def register_user(user_create: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")  # 🚀 Limita a 5 tentativas de registro por minuto por IP
+async def register_user(request: Request, user_create: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
     # UC01 - Registrar Usuário (Consumidor padrão)
     query = select(models.User).filter(models.User.email == user_create.email)
     existing_user = (await db.execute(query)).scalar_one_or_none()
@@ -30,7 +38,8 @@ async def register_user(user_create: schemas.UserCreate, db: AsyncSession = Depe
     return new_user
 
 @router.post("/login", response_model=schemas.Token)
-async def login_for_access_token(user_login: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")  # 🚀 Limita a 5 tentativas de login por minuto por IP
+async def login_for_access_token(request: Request, user_login: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
     # UC04 - Efetuar Login
     query = select(models.User).filter(models.User.email == user_login.email)
     user = (await db.execute(query)).scalar_one_or_none()

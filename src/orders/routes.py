@@ -14,17 +14,29 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 def get_order_service() -> OrderService:
     return OrderService()
 
+@router.post("/coupons/validate", response_model=schemas.CouponValidateResponse)
+async def validate_coupon(
+    payload: schemas.CouponValidateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    service: OrderService = Depends(get_order_service)
+):
+    """Calcula o desconto de um cupom para o carrinho atual do usuário, sem finalizar a compra."""
+    return await service.validate_coupon(current_user.id, payload.coupon_code, db)
+
 @router.post("/checkout", response_model=schemas.CheckoutResponse, status_code=status.HTTP_201_CREATED)
 async def create_order_checkout(
-    current_user: User = Depends(get_current_user), # UC16 - Finalizar Compra
+    payload: schemas.CheckoutRequest = None, # 🚀 NOVO: Aceita o body com o cupom
+    current_user: User = Depends(get_current_user), 
     db: AsyncSession = Depends(get_db),
     service: OrderService = Depends(get_order_service)
 ):
     """
     Processa o carrinho ativo do usuário logado, valida o estoque de cada item,
-    cria o pedido com status PENDING e limpa o carrinho.
+    aplica o cupom de desconto (se existir), cria o pedido e limpa o carrinho.
     """
-    return await service.checkout(current_user.id, db)
+    coupon = payload.coupon_code if payload else None
+    return await service.checkout(current_user.id, db, coupon_code=coupon)
 
 @router.get("/{order_id}", response_model=schemas.OrderResponse) # Novo endpoint para detalhes de um pedido
 async def get_single_order_details(
