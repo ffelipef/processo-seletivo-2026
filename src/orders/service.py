@@ -244,3 +244,32 @@ class OrderService:
             .order_by(Order.created_at.desc())
         )
         return (await db.execute(query)).scalars().all()
+    
+    async def update_status_by_admin(self, order_id: UUID, new_status: OrderStatus, db: AsyncSession) -> Order:
+        # 🚀 AQUI ESTÁ A CORREÇÃO: Adicionamos o .options(selectinload...)
+        query = (
+            select(Order)
+            .filter(Order.id == order_id)
+            .options(selectinload(Order.items).selectinload(OrderItem.product))
+        )
+        order = (await db.execute(query)).scalar_one_or_none()
+        
+        if not order:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+            
+        # Máquina de estados blindada
+        if new_status.value == "shipped" and order.status != "paid":
+            raise HTTPException(status_code=400, detail="Pedido precisa estar PAGO para ser enviado.")
+            
+        if new_status.value == "delivered" and order.status != "shipped":
+            raise HTTPException(status_code=400, detail="Pedido precisa ter sido ENVIADO para ser entregue.")
+            
+        order.status = new_status
+        order.updated_at = datetime.now(timezone.utc)
+        
+        await db.commit()
+        await db.refresh(order)
+        
+        return order
+
+        

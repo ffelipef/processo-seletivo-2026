@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from typing import Optional
-
+from src.limiter import limiter
 from src.database import get_db
 # Supondo que você tenha uma factory ou dependência para injetar o cliente Redis assíncrono
 from src.database import get_redis  
@@ -31,6 +31,7 @@ async def create_product(
 @router.get("", response_model=schemas.ProductPaginatedResponse)
 @limiter.limit("60/minute")
 async def list_products(
+    request: Request,
     page: int = Query(1, ge=1, description="Número da página"),
     size: int = Query(10, ge=1, le=100, description="Quantidade de itens por página"),
     category: Optional[str] = Query(None, description="Filtrar por categoria"),

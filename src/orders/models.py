@@ -10,6 +10,8 @@ from datetime import datetime
 class OrderStatus(str, Enum):
     PENDING = "pending"
     PAID = "paid"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered" # 🚀 CORREÇÃO: O status DELIVERED foi adicionado!
     FAILED = "failed"
     CANCELED = "canceled"
 
@@ -79,4 +81,4 @@ class CouponUsage(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     coupon_id = Column(UUID(as_uuid=True), ForeignKey("coupons.id"), nullable=False)
     order_id = Column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False)
-    used_at = Column(DateTime, default=datetime.utcnow)        
+    used_at = Column(DateTime, default=datetime.utcnow)
