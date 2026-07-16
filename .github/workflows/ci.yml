@@ -62,8 +62,8 @@ jobs:
 
     - name: SonarQube Scan
       uses: SonarSource/sonarqube-scan-action@v3
+      continue-on-error: true  # 🚀 IMPORTANTE: Evita que a pipeline quebre se as secrets do Sonar não estiverem configuradas no fork
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        # Se usar SonarCloud, a linha abaixo não é estritamente necessária, 
-        # mas se for um SonarQube self-hosted, adicione a secret no GitHub
-        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        # Fallback para SonarCloud caso a secret SONAR_HOST_URL esteja vazia
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL || 'https://sonarcloud.io' }}
