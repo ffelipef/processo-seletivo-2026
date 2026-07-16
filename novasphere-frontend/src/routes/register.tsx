@@ -7,8 +7,8 @@ import { AuthFrame, Field } from "./login";
 export const Route = createFileRoute("/register")({
   head: () => ({
     meta: [
-      { title: "Register — NovaSphere" },
-      { name: "description", content: "Create a NovaSphere account." },
+      { title: "Cadastro — NovaSphere" },
+      { name: "description", content: "Crie uma conta NovaSphere." },
     ],
   }),
   component: RegisterPage,
@@ -26,29 +26,29 @@ function RegisterPage() {
     setBusy(true);
     try {
       await register(email, pw);
-      toast.success("Account created");
+      toast.success("Conta criada com sucesso");
       nav({ to: "/" });
     } catch (err: any) {
-      toast.error(err?.message ?? "Register failed — backend unavailable");
+      toast.error(err?.message ?? "Falha no cadastro — servidor indisponível");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <AuthFrame title="Register" caption="Provision a NovaSphere identity.">
+    <AuthFrame title="Cadastro" caption="Crie sua identidade NovaSphere.">
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="you@nova.sphere" />
-        <Field label="Password" value={pw} onChange={setPw} type="password" placeholder="Minimum 6 characters" />
+        <Field label="E-mail" value={email} onChange={setEmail} type="email" placeholder="voce@nova.sphere" />
+        <Field label="Senha" value={pw} onChange={setPw} type="password" placeholder="Mínimo de 6 caracteres" />
         <button
           disabled={busy}
           className="snap-btn h-11 rounded-full bg-foreground text-background text-xs uppercase tracking-[0.22em] font-medium disabled:opacity-60"
         >
-          {busy ? "Provisioning…" : "Create account"}
+          {busy ? "Criando…" : "Criar conta"}
         </button>
         <p className="text-xs text-center text-muted-foreground">
-          Already registered?{" "}
-          <Link to="/login" className="underline underline-offset-4 hover:text-foreground">Sign in</Link>
+          Já possui conta?{" "}
+          <Link to="/login" className="underline underline-offset-4 hover:text-foreground">Entrar</Link>
         </p>
       </form>
     </AuthFrame>

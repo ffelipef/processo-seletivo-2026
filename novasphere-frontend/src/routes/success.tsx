@@ -1,23 +1,22 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { DotBadge } from "@/components/icons/NovaIcons"; // Assuming NovaLogo is no longer needed or comes from here
+import { DotBadge } from "@/components/icons/NovaIcons";
 import { useEffect, useState } from "react";
 import { api, OrderResponse, OrderStatus, PaymentSimulationResponse, type ApiError } from '../services/api';
-import { useStore } from '@/lib/store'; // Para limpar o carrinho
-import { toast } from "sonner"; // Usando sonner para toasts
-import { Loader2 } from 'lucide-react'; // Para ícones de loading/spinner
+import { useStore } from '@/lib/store';
+import { toast } from "sonner";
+import { Loader2 } from 'lucide-react';
 
-// Schema para validar os parâmetros de busca da URL
 const searchSchema = z.object({
-  orderId: z.string().uuid(), // Espera um UUID válido como orderId
+  orderId: z.string().uuid(),
 });
 
 export const Route = createFileRoute("/success")({
   validateSearch: (s) => searchSchema.parse(s),
   head: () => ({
     meta: [
-      { title: "Order Status — NovaSphere" },
-      { name: "description", content: "View your NovaSphere order status and simulate payment." },
+      { title: "Status do Pedido — NovaSphere" },
+      { name: "description", content: "Veja o status do seu pedido na NovaSphere e simule o pagamento." },
     ],
   }),
   component: SuccessPage,
@@ -26,7 +25,7 @@ export const Route = createFileRoute("/success")({
 function SuccessPage() {
   const { orderId } = Route.useSearch();
   const navigate = useNavigate();
-  const { clearCart } = useStore(); // Ação para limpar o carrinho
+  const { clearCart } = useStore();
 
   const [order, setOrder] = useState<OrderResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,7 +53,7 @@ function SuccessPage() {
     };
 
     fetchOrder();
-  }, [orderId, navigate, toast]);
+  }, [orderId, navigate]);
 
   const handleSimulatePayment = async (simulatedResult: 'success' | 'fail') => {
     if (!orderId) return;
@@ -120,7 +119,7 @@ function SuccessPage() {
       case 'pending': return 'text-yellow-500';
       case 'paid': return 'text-green-500';
       case 'failed':
-      case 'canceled': return 'text-nova-red'; // NovaSphere red
+      case 'canceled': return 'text-nova-red';
       default: return 'text-gray-400';
     }
   };
@@ -150,8 +149,7 @@ function SuccessPage() {
         <div
           className="absolute -top-2 left-0 right-0 h-4"
           style={{
-            background:
-              "radial-gradient(circle at 8px 8px, var(--background) 4px, transparent 5px) repeat-x",
+            background: "radial-gradient(circle at 8px 8px, var(--background) 4px, transparent 5px) repeat-x",
             backgroundSize: "16px 16px",
           }}
         />
@@ -213,13 +211,13 @@ function SuccessPage() {
         <div
           className="absolute -bottom-2 left-0 right-0 h-4"
           style={{
-            background:
-              "radial-gradient(circle at 8px 8px, var(--background) 4px, transparent 5px) repeat-x",
+            background: "radial-gradient(circle at 8px 8px, var(--background) 4px, transparent 5px) repeat-x",
             backgroundSize: "16px 16px",
           }}
         />
       </div>
-      {/* Confetes para PAUD */}
+      
+      {/* Confetes para PAID */}
       {isPaid && (
           <style dangerouslySetInnerHTML={{__html: `
               @keyframes fall {
@@ -257,7 +255,6 @@ function SuccessPage() {
   );
 }
 
-// O componente Row pode permanecer o mesmo, mas precisa ser exportado se for em outro arquivo ou definido aqui
 function Row({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   return (
     <div className="flex items-center justify-between">

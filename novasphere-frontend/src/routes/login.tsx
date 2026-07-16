@@ -7,8 +7,8 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — NovaSphere" },
-      { name: "description", content: "Sign in to your NovaSphere account." },
+      { title: "Entrar — NovaSphere" },
+      { name: "description", content: "Entre na sua conta NovaSphere." },
     ],
   }),
   component: LoginPage,
@@ -26,28 +26,28 @@ function LoginPage() {
     setBusy(true);
     try {
       await login(email, pw);
-      toast.success("Signed in");
+      toast.success("Login efetuado com sucesso");
       nav({ to: "/" });
     } catch (err: any) {
-      toast.error(err?.message ?? "Login failed — backend unavailable");
+      toast.error(err?.message ?? "Falha no login — servidor indisponível");
     } finally {
       setBusy(false);
     }
   }
 
-  return <AuthFrame title="Sign in" caption="Authenticate to sync your session.">
+  return <AuthFrame title="Entrar" caption="Autentique-se para sincronizar sua sessão.">
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      <Field label="Email" value={email} onChange={setEmail} type="email" placeholder="you@nova.sphere" />
-      <Field label="Password" value={pw} onChange={setPw} type="password" placeholder="••••••••" />
+      <Field label="E-mail" value={email} onChange={setEmail} type="email" placeholder="voce@nova.sphere" />
+      <Field label="Senha" value={pw} onChange={setPw} type="password" placeholder="••••••••" />
       <button
         disabled={busy}
         className="snap-btn h-11 rounded-full bg-foreground text-background text-xs uppercase tracking-[0.22em] font-medium disabled:opacity-60"
       >
-        {busy ? "Connecting…" : "Sign in"}
+        {busy ? "Conectando…" : "Entrar"}
       </button>
       <p className="text-xs text-center text-muted-foreground">
-        No account?{" "}
-        <Link to="/register" className="underline underline-offset-4 hover:text-foreground">Register</Link>
+        Sem conta?{" "}
+        <Link to="/register" className="underline underline-offset-4 hover:text-foreground">Cadastre-se</Link>
       </p>
     </form>
   </AuthFrame>;
@@ -59,7 +59,7 @@ export function AuthFrame({ title, caption, children }: { title: string; caption
       <div className="grid-frame corner-ticks p-8 relative">
         <div className="absolute top-4 right-6 flex items-center gap-2">
           <span className="led-dot" />
-          <DotBadge>Secure</DotBadge>
+          <DotBadge>Seguro</DotBadge>
         </div>
         <NovaLogo size={44} className="mx-auto mb-4" />
         <h1 className="text-center font-display text-2xl font-semibold">{title}</h1>

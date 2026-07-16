@@ -17,7 +17,7 @@ export function CartSidebar() {
         }`}
       />
       <aside
-        aria-label="Cart"
+        aria-label="Carrinho"
         className={`fixed top-0 right-0 z-50 h-full w-full max-w-md bg-background border-l border-border shadow-2xl
           transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]
           ${cartOpen ? "translate-x-0" : "translate-x-full"}`}
@@ -26,16 +26,16 @@ export function CartSidebar() {
           <div className="flex items-center gap-3">
             <NovaCart size={22} />
             <div className="flex flex-col leading-tight">
-              <span className="font-display font-bold text-sm">Your cart</span>
+              <span className="font-display font-bold text-sm">Seu carrinho</span>
               <span className="font-dot text-[11px] text-muted-foreground tracking-widest uppercase">
-                session / open
+                sessão / aberta
               </span>
             </div>
           </div>
           <button
             onClick={closeCart}
             className="h-9 w-9 grid place-items-center rounded-full border border-border snap-btn hover:bg-muted"
-            aria-label="Close cart"
+            aria-label="Fechar carrinho"
           >
             <X size={16} />
           </button>
@@ -45,8 +45,8 @@ export function CartSidebar() {
           {cartItems.length === 0 && (
             <div className="grid-frame corner-ticks p-6 text-center">
               <span className="led-dot mx-auto mb-3" />
-              <p className="font-dot text-lg">CART EMPTY</p>
-              <p className="text-xs text-muted-foreground mt-1">Add units from the catalog.</p>
+              <p className="font-dot text-lg">CARRINHO VAZIO</p>
+              <p className="text-xs text-muted-foreground mt-1">Adicione unidades do catálogo.</p>
             </div>
           )}
           {cartItems.map((it) => {
@@ -65,7 +65,7 @@ export function CartSidebar() {
                   <button
                     onClick={() => setQty(it.product_id, it.quantity - 1)}
                     className="h-7 w-7 grid place-items-center rounded-full snap-btn hover:bg-muted"
-                    aria-label="Decrease"
+                    aria-label="Diminuir"
                   >
                     <Minus size={12} />
                   </button>
@@ -73,7 +73,7 @@ export function CartSidebar() {
                   <button
                     onClick={() => setQty(it.product_id, it.quantity + 1)}
                     className="h-7 w-7 grid place-items-center rounded-full snap-btn hover:bg-muted"
-                    aria-label="Increase"
+                    aria-label="Aumentar"
                   >
                     <Plus size={12} />
                   </button>
@@ -81,7 +81,7 @@ export function CartSidebar() {
                 <button
                   onClick={() => removeItem(it.product_id)}
                   className="text-muted-foreground hover:text-nova-red snap-btn"
-                  aria-label="Remove"
+                  aria-label="Remover"
                 >
                   <X size={16} />
                 </button>
@@ -105,7 +105,7 @@ export function CartSidebar() {
                 ? "bg-muted text-muted-foreground pointer-events-none"
                 : "bg-foreground text-background hover:bg-nova-red"}`}
           >
-            Proceed to checkout
+            Finalizar compra
           </Link>
         </div>
       </aside>
