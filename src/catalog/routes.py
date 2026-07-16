@@ -29,6 +29,7 @@ async def create_product(
     return await service.create_product(product_in, db)
 
 @router.get("", response_model=schemas.ProductPaginatedResponse)
+@limiter.limit("60/minute")
 async def list_products(
     page: int = Query(1, ge=1, description="Número da página"),
     size: int = Query(10, ge=1, le=100, description="Quantidade de itens por página"),

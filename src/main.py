@@ -59,7 +59,8 @@ app = FastAPI(
 
 # --- CONFIGURAÇÃO DO RATE LIMITER ---
 # Define que a limitação será baseada no IP do usuário
-limiter = Limiter(key_func=get_remote_address)
+from src.limiter import limiter
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
