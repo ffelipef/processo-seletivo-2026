@@ -1,0 +1,186 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-concrete: var(--concrete);
+  --color-nova-red: var(--nova-red);
+  --color-nova-red-glow: var(--nova-red-glow);
+  --color-ink: var(--ink);
+  --color-clinical: var(--clinical);
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-dot: "VT323", ui-monospace, monospace;
+}
+
+:root {
+  --radius: 0.25rem;
+
+  /* Nothing-inspired palette */
+  --ink: oklch(0.08 0 0);              /* #0A0A0A */
+  --clinical: oklch(0.98 0 0);         /* #F9F9F9 */
+  --concrete: oklch(0.905 0 0);        /* #E5E5E5 */
+  --nova-red: oklch(0.62 0.24 27);     /* #FF2F2F */
+  --nova-red-glow: oklch(0.72 0.24 27);
+
+  --background: var(--clinical);
+  --foreground: var(--ink);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--ink);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--clinical);
+  --secondary: var(--concrete);
+  --secondary-foreground: var(--ink);
+  --muted: oklch(0.94 0 0);
+  --muted-foreground: oklch(0.42 0 0);
+  --accent: var(--nova-red);
+  --accent-foreground: var(--clinical);
+  --destructive: var(--nova-red);
+  --destructive-foreground: var(--clinical);
+  --border: oklch(0.88 0 0);
+  --input: oklch(0.88 0 0);
+  --ring: var(--ink);
+}
+
+.dark {
+  --background: var(--ink);
+  --foreground: var(--clinical);
+  --card: oklch(0.12 0 0);
+  --card-foreground: var(--clinical);
+  --popover: oklch(0.12 0 0);
+  --popover-foreground: var(--clinical);
+  --primary: var(--clinical);
+  --primary-foreground: var(--ink);
+  --secondary: oklch(0.18 0 0);
+  --secondary-foreground: var(--clinical);
+  --muted: oklch(0.16 0 0);
+  --muted-foreground: oklch(0.65 0 0);
+  --accent: var(--nova-red);
+  --accent-foreground: var(--clinical);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: var(--clinical);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html, body { background-color: var(--color-background); color: var(--color-foreground); }
+  body {
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "ss02", "cv11";
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(circle at 1px 1px, oklch(0 0 0 / 0.06) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+  .dark body {
+    background-image:
+      radial-gradient(circle at 1px 1px, oklch(1 0 0 / 0.06) 1px, transparent 0);
+  }
+  ::selection { background: var(--nova-red); color: var(--clinical); }
+}
+
+@utility font-dot { font-family: var(--font-dot); letter-spacing: 0.02em; }
+@utility font-mono-tight { font-family: var(--font-mono); letter-spacing: -0.01em; }
+
+@utility glass {
+  background: color-mix(in oklab, var(--card) 55%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid color-mix(in oklab, var(--foreground) 12%, transparent);
+}
+@utility glass-dark {
+  background: color-mix(in oklab, var(--ink) 60%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid oklch(1 0 0 / 0.1);
+  color: var(--clinical);
+}
+
+@utility grid-frame {
+  position: relative;
+  border: 1px solid var(--color-border);
+  background:
+    linear-gradient(var(--color-card), var(--color-card)),
+    repeating-linear-gradient(0deg, transparent 0 22px, oklch(0 0 0 / 0.04) 22px 23px),
+    repeating-linear-gradient(90deg, transparent 0 22px, oklch(0 0 0 / 0.04) 22px 23px);
+  background-blend-mode: normal, multiply, multiply;
+}
+
+@utility corner-ticks {
+  position: relative;
+}
+@utility corner-ticks {
+  &::before, &::after {
+    content: "";
+    position: absolute;
+    width: 10px; height: 10px;
+    border-color: var(--color-foreground);
+    pointer-events: none;
+  }
+  &::before { top: -1px; left: -1px; border-top: 1px solid; border-left: 1px solid; }
+  &::after  { bottom: -1px; right: -1px; border-bottom: 1px solid; border-right: 1px solid; }
+}
+
+@utility led-dot {
+  display: inline-block;
+  width: 8px; height: 8px; border-radius: 9999px;
+  background: var(--nova-red);
+  box-shadow:
+    0 0 6px var(--nova-red-glow),
+    0 0 14px color-mix(in oklab, var(--nova-red) 60%, transparent);
+  animation: novaPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes novaPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.85); }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+@utility scanline {
+  position: relative; overflow: hidden;
+  &::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(to bottom, transparent, oklch(1 0 0 / 0.06), transparent);
+    animation: scanline 3.2s linear infinite;
+    pointer-events: none;
+  }
+}
+
+@utility snap-btn {
+  transition: transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 120ms, color 120ms, box-shadow 120ms;
+}
+@utility snap-btn {
+  &:active { transform: translateY(1px) scale(0.985); }
+}

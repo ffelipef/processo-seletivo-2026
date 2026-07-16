@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { DotBadge } from "@/components/icons/NovaIcons"; // Assuming NovaLogo is no longer needed or comes from here
 import { useEffect, useState } from "react";
-import { getOrderDetails, simulatePayment, OrderResponse, OrderStatus, PaymentSimulationResponse } from '../services/api'; // Importar tipos e funções da API
+import { api, OrderResponse, OrderStatus, PaymentSimulationResponse, type ApiError } from '../services/api';
 import { useStore } from '@/lib/store'; // Para limpar o carrinho
 import { toast } from "sonner"; // Usando sonner para toasts
 import { Loader2 } from 'lucide-react'; // Para ícones de loading/spinner
@@ -41,11 +41,11 @@ function SuccessPage() {
       }
 
       try {
-        const fetchedOrder = await getOrderDetails(orderId);
+        const fetchedOrder = await api.getOrder(orderId);
         setOrder(fetchedOrder);
-      } catch (error: any) {
+      } catch (error) {
         console.error("Erro ao buscar detalhes do pedido:", error);
-        const errorMessage = error.response?.data?.detail || error?.message || "Não foi possível carregar os detalhes do pedido.";
+        const errorMessage = (error as ApiError)?.message || "Não foi possível carregar os detalhes do pedido.";
         toast.error(errorMessage);
         navigate({ to: '/' });
       } finally {
@@ -61,19 +61,19 @@ function SuccessPage() {
 
     setIsSimulatingPayment(true);
     try {
-      const response: PaymentSimulationResponse = await simulatePayment(orderId, simulatedResult);
+      const response: PaymentSimulationResponse = await api.simulatePayment(orderId, simulatedResult);
       
       setOrder((prevOrder) => prevOrder ? { ...prevOrder, status: response.new_status, updated_at: new Date().toISOString() } : null);
 
       if (response.new_status === 'paid') {
         toast.success(`Pagamento Aprovado! Pedido #${orderId.substring(0, 8)}.`);
-        clearCart(); // Limpa o carrinho apenas se o pagamento for aprovado
-      } else if (response.new_status === 'failed' || response.new_status === 'canceled') { // Considerando 'canceled' também para falha
+        clearCart();
+      } else if (response.new_status === 'failed' || response.new_status === 'canceled') {
         toast.error(`Pagamento falhou. Pedido #${orderId.substring(0, 8)} foi cancelado e o estoque devolvido.`);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Erro ao simular pagamento:", error);
-      const errorMessage = error.response?.data?.detail || error?.message || "Ocorreu um erro na simulação de pagamento.";
+      const errorMessage = (error as ApiError)?.message || "Ocorreu um erro na simulação de pagamento.";
       toast.error(errorMessage);
     } finally {
       setIsSimulatingPayment(false);

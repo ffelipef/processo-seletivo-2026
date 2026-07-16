@@ -1,9 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { useStore } from "@/lib/store"; // Importar useStore
+import { useStore } from "@/lib/store";
+import { api } from "@/lib/api";
 import { DotBadge } from "@/components/icons/NovaIcons";
 import { toast } from "sonner";
-// Removido importação direta de checkoutOrder, pois agora virá do store
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -16,9 +16,34 @@ export const Route = createFileRoute("/checkout")({
 });
 
 function CheckoutPage() {
-  const { cart, products, auth, checkout } = useStore(); // Recupera a função checkout do store
+  const { cart, products, auth, checkout } = useStore();
   const nav = useNavigate();
   const [busy, setBusy] = useState(false);
+
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [discountPreview, setDiscountPreview] = useState<number | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  const handleApplyCoupon = async () => {
+    if (!couponInput.trim()) return;
+    const code = couponInput.toUpperCase();
+    setCouponLoading(true);
+    try {
+      const preview = await api.validateCoupon(code);
+      setAppliedCoupon(code);
+      setDiscountPreview(preview.discount_amount);
+      toast.success(`Cupom ${code} aplicado: -$${preview.discount_amount.toFixed(2)}`);
+    } catch (err: any) {
+      setAppliedCoupon(null);
+      setDiscountPreview(null);
+      toast.error(err.message || "Cupom inválido.");
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const estimatedTotal = cart.total - (discountPreview ?? 0);
 
   async function onCheckout() {
     if (cart.items.length === 0) {
@@ -27,20 +52,23 @@ function CheckoutPage() {
     }
     setBusy(true);
     try {
-      // Chama a função de checkout do store
-      const res = await checkout();
-      
-      toast.success(`Pedido #${res.order_id.substring(0, 8)} criado com status PENDENTE.`);
-      
-      // Redireciona para a rota de sucesso com o orderId
-      nav({ to: "/success", search: { orderId: res.order_id } });
-      
-      // A limpeza do carrinho ocorrerá na página de sucesso se o pagamento for aprovado.
+      const res = await checkout(appliedCoupon || undefined);
+      const discount = cart.total - res.total_price;
 
+      if (discount > 0.01) {
+        toast.success(
+          `Pedido #${res.order_id.substring(0, 8)} criado. Desconto: -$${discount.toFixed(2)} · Total: $${res.total_price.toFixed(2)}`
+        );
+      } else {
+        toast.success(`Pedido #${res.order_id.substring(0, 8)} criado com status PENDENTE.`);
+      }
+
+      nav({ to: "/success", search: { orderId: res.order_id } });
     } catch (err: any) {
       console.error("Erro no checkout:", err);
-      const errorMessage = err.message || "Checkout failed"; // erro.response?.data?.detail não está disponível com fetch
-      toast.error(errorMessage);
+      toast.error(err.message || "Erro no checkout ou cupom inválido.");
+      setAppliedCoupon(null);
+      setDiscountPreview(null);
     } finally {
       setBusy(false);
     }
@@ -59,7 +87,6 @@ function CheckoutPage() {
       </div>
 
       <div className="mt-8 grid md:grid-cols-[1fr_360px] gap-6">
-        {/* Line items */}
         <div className="grid-frame corner-ticks p-6">
           {cart.items.length === 0 ? (
             <div className="text-center py-16">
@@ -86,7 +113,6 @@ function CheckoutPage() {
                     <tr key={it.product_id} className="border-b border-border/60">
                       <td className="py-3">
                         <p className="font-medium">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">{p.tagline}</p>
                       </td>
                       <td className="py-3 text-right font-dot">{it.quantity.toString().padStart(2, "0")}</td>
                       <td className="py-3 text-right font-dot">${(p.price * it.quantity).toFixed(2)}</td>
@@ -98,30 +124,53 @@ function CheckoutPage() {
           )}
         </div>
 
-        {/* Summary */}
         <aside className="grid-frame corner-ticks p-6 h-fit sticky top-24">
           <DotBadge>Summary</DotBadge>
           <div className="mt-4 space-y-2 text-sm">
             <Row label="Subtotal" value={`$${cart.total.toFixed(2)}`} />
             <Row label="Shipping" value="Included" />
-            <Row label="Tax" value="Calculated at fulfilment" />
+            {discountPreview !== null && (
+              <Row label="Discount" value={`-$${discountPreview.toFixed(2)}`} />
+            )}
           </div>
+
+          <div className="mt-6 border-t border-border pt-4">
+            <label className="text-xs uppercase tracking-widest text-muted-foreground mb-2 block">Discount Code</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={couponInput}
+                onChange={(e) => setCouponInput(e.target.value)}
+                placeholder="PROMO2026"
+                className="w-full bg-transparent border border-border p-2 text-sm outline-none focus:border-nova-red"
+              />
+              <button
+                onClick={handleApplyCoupon}
+                disabled={couponLoading}
+                className="px-3 border border-border hover:bg-white/10 text-xs uppercase transition-colors disabled:opacity-50"
+              >
+                {couponLoading ? "..." : "Apply"}
+              </button>
+            </div>
+            {appliedCoupon && discountPreview !== null && (
+              <p className="text-nova-red mt-2 text-[11px] uppercase tracking-wider">
+                [{appliedCoupon}] -${discountPreview.toFixed(2)} applied
+              </p>
+            )}
+          </div>
+
           <div className="border-t border-border mt-4 pt-4 flex items-baseline justify-between">
-            <span className="font-dot text-xs uppercase tracking-widest text-muted-foreground">Total</span>
-            <span className="font-dot text-3xl">${cart.total.toFixed(2)}</span>
+            <span className="font-dot text-xs uppercase tracking-widest text-muted-foreground">Est. Total</span>
+            <span className="font-dot text-3xl">${estimatedTotal.toFixed(2)}</span>
           </div>
+
           <button
             disabled={busy || cart.items.length === 0}
             onClick={onCheckout}
-            className="snap-btn mt-6 w-full h-11 rounded-full bg-foreground text-background text-xs uppercase tracking-[0.22em] font-medium hover:bg-nova-red disabled:opacity-50 disabled:pointer-events-none"
+            className="snap-btn mt-6 w-full h-11 rounded-full bg-foreground text-background text-xs uppercase tracking-[0.22em] font-medium hover:bg-nova-red disabled:opacity-50 disabled:pointer-events-none transition-colors"
           >
             {busy ? "Processing…" : "Confirm order"}
           </button>
-          {!auth.token && (
-            <p className="mt-3 text-[11px] text-center text-muted-foreground">
-              <Link to="/login" className="underline">Sign in</Link> to sync your order history.
-            </p>
-          )}
         </aside>
       </div>
     </div>

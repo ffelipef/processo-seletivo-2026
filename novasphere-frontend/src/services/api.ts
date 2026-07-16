@@ -1,7 +1,8 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 function getToken(): string | null {
-  return localStorage.getItem("token"); // Assumindo que o token é armazenado no localStorage
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("nova.token");
 }
 
 export interface ApiError {
@@ -144,21 +145,21 @@ export const removeCartItem = async (itemId: string): Promise<void> => {
 };
 
 // Orders
-export const checkoutOrder = async (): Promise<CheckoutResponse> => {
+export const checkoutOrder = async (couponCode?: string): Promise<CheckoutResponse> => {
     return request<CheckoutResponse>('/orders/checkout', {
         method: 'POST',
+        body: JSON.stringify(couponCode ? { coupon_code: couponCode } : {}),
     });
 };
 
-export const getOrderDetails = async (orderId: string): Promise<OrderResponse> => {
-    return request<OrderResponse>(`/orders/${orderId}`);
-};
+export const api = {
+    getOrder: (id: string) => request<any>(`/orders/${id}`),
 
-export const simulatePayment = async (orderId: string, status: 'success' | 'fail'): Promise<PaymentSimulationResponse> => {
-    return request<PaymentSimulationResponse>(`/orders/${orderId}/simulate-payment`, {
-        method: 'POST',
-        body: JSON.stringify({ status }),
-    });
+    simulatePayment: (id: string, status: 'success' | 'fail') =>
+        request<any>(`/orders/${id}/simulate-payment`, {
+            method: "POST",
+            body: JSON.stringify({ status }),
+        }),
 };
 
 // Autenticação
