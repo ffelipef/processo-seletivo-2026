@@ -1,8 +1,17 @@
 import asyncio
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from src.database import Base
-from src.catalog.models import Product
 import os
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.orm import configure_mappers
+
+# Garante o carregamento dos modelos na ordem certa
+from src.auth.models import User
+from src.catalog.models import Product
+from src.cart.models import CartItem
+from src.orders.models import Order, OrderItem, Coupon, CouponUsage, DiscountType
+
+configure_mappers()
 
 # Puxa credenciais do .env ou usa defaults
 DB_USER = os.getenv("POSTGRES_USER", "postgres")
@@ -16,9 +25,7 @@ DATABASE_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT
 engine = create_async_engine(DATABASE_URL, echo=True)
 SessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
 
-# Nossa curadoria de produtos Old Tech e Modernos para expressão pessoal
 PRODUCTS_SEED = [
-    # 📻 CATEGORIA: RETRO / NOSTALGIA
     {
         "name": "Walkman Sony Cassette Player",
         "description": "Clássico toca-fitas dos anos 90. Perfeito para ouvir sua mixtape favorita com aquele som analógico caloroso.",
@@ -46,7 +53,6 @@ PRODUCTS_SEED = [
         "image_url": "https://placehold.co/400x400?text=Fita+TDK",
         "is_retro": True
     },
-    # ⚡ CATEGORIA: MODERN / EXPRESSION / DIY
     {
         "name": "Módulo ESP32 NodeMCU WiFi + Bluetooth",
         "description": "Microcontrolador perfeito para entusiastas de IoT e automação. Solte sua criatividade e programe seus próprios gadgets.",
@@ -85,13 +91,38 @@ PRODUCTS_SEED = [
     }
 ]
 
+# 🚀 CORREÇÃO EXPLICITA AQUI: .replace(tzinfo=None) remove o fuso horário para salvar na coluna naive
+COUPONS_SEED = [
+    {
+        "code": "CYBER2026",
+        "discount_type": DiscountType.percentage,
+        "discount_value": 15.00,
+        "min_order_value": 100.00,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=365)).replace(tzinfo=None),
+        "is_active": True
+    },
+    {
+        "code": "RETRO50",
+        "discount_type": DiscountType.fixed,
+        "discount_value": 50.00,
+        "min_order_value": 200.00,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=365)).replace(tzinfo=None),
+        "is_active": True
+    }
+]
+
 async def seed():
     async with SessionLocal() as session:
         async with session.begin():
             for p_data in PRODUCTS_SEED:
                 product = Product(**p_data)
                 session.add(product)
-        print("🌱 Banco de dados povoado com sucesso no NovaSphere!")
+            
+            for c_data in COUPONS_SEED:
+                coupon = Coupon(**c_data)
+                session.add(coupon)
+                
+        print("🌱 Banco de dados povoado com sucesso no NovaSphere (Produtos e Cupons)!")
 
 if __name__ == "__main__":
     asyncio.run(seed())
