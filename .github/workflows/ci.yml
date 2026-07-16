@@ -38,6 +38,8 @@ jobs:
     steps:
     - name: Checkout código
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # 🚀 IMPORTANTE: O Sonar precisa do histórico completo do git para analisar o código
 
     - name: Configurar Python
       uses: actions/setup-python@v5
@@ -49,10 +51,19 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Executar Testes com Pytest
+    - name: Executar Testes com Cobertura XML
       env:
         DATABASE_URL: postgresql+asyncpg://postgres:password@localhost:5432/novasphere_test
         REDIS_URL: redis://localhost:6379/0
-        SECRET_KEY: test-secret-key-lapes-2026  # 🚀 CORREÇÃO: Trocado de JWT_SECRET para SECRET_KEY
+        SECRET_KEY: test-secret-key-lapes-2026
       run: |
-        pytest --cov=src tests/
+        # 🚀 Geração do relatório XML para o Sonar ler a cobertura
+        pytest --cov=src --cov-report=xml tests/
+
+    - name: SonarQube Scan
+      uses: SonarSource/sonarqube-scan-action@v3
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        # Se usar SonarCloud, a linha abaixo não é estritamente necessária, 
+        # mas se for um SonarQube self-hosted, adicione a secret no GitHub
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
