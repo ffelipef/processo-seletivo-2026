@@ -50,7 +50,7 @@ O projeto foi totalmente containerizado. Siga os passos abaixo para executá-lo 
 
 1. **Clonar o repositório** e entrar na pasta raiz:
    ```bash
-   git clone <URL_DO_FORK>
+   git clone https://github.com/ffelipef/processo-seletivo-2026
    cd processo-seletivo-2026
    ```
 
