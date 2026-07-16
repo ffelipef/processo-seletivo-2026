@@ -5,20 +5,20 @@ import pytest_asyncio
 from typing import AsyncGenerator
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.pool import NullPool # 🚀 IMPORTANTE: Importamos o NullPool
+from sqlalchemy.pool import NullPool
+from unittest.mock import AsyncMock, patch
 
 from src.main import app
 from src.database import Base, get_db
 
 DB_USER = os.getenv("POSTGRES_USER", "postgres")
-DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
-DB_HOST = "db"
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password") # Ajustado para o padrão do ci.yml
+DB_HOST = os.getenv("POSTGRES_HOST", "localhost")
 DB_PORT = "5432"
-DB_NAME = "novasphere_test_db"
+DB_NAME = "novasphere_test"
 
 TEST_DATABASE_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-# 🚀 Trocamos para NullPool e removemos o pool_pre_ping para eliminar conflitos de loops fechados
 test_engine = create_async_engine(
     TEST_DATABASE_URL, 
     echo=False,
@@ -44,12 +44,17 @@ async def setup_test_db():
         await conn.run_sync(Base.metadata.drop_all)
     await test_engine.dispose()
 
+@pytest_asyncio.fixture(autouse=True)
+def mock_redis_cache():
+    """Impede que os testes tentem acessar o Redis real ao invalidar o cache no checkout/cancel."""
+    with patch("src.catalog.service.CatalogService.invalidate_cache", new_callable=AsyncMock) as mock:
+        yield mock
+
 @pytest_asyncio.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """Injeta uma sessão limpa e isolada do banco por teste."""
     async with TestingSessionLocal() as session:
         yield session
-        # Fechamento manual e limpo
         await session.close()
 
 @pytest_asyncio.fixture

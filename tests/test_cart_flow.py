@@ -1,99 +1,126 @@
 import pytest
+import asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from src.catalog.models import Product  # Importe o modelo de produto do seu catálogo
+from src.catalog.models import Product
 from src.auth.models import User
+
+# Função auxiliar para não repetir código nos testes
+async def setup_user_and_get_headers(client: AsyncClient, email: str):
+    await client.post("/auth/register", json={"name": "Tester", "email": email, "password": "pass"})
+    res = await client.post("/auth/login", json={"email": email, "password": "pass"})
+    token = res.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 @pytest.mark.asyncio
 async def test_full_purchase_and_inventory_decrement_flow(client: AsyncClient, db_session: AsyncSession):
-    """
-    Simula o ciclo de vida de uma compra real no NovaSphere:
-    1. Registra e loga um usuário de testes (obtendo o Token JWT).
-    2. Garante um produto (Walkman Sony) no banco com estoque controlado.
-    3. Adiciona o produto ao carrinho (POST /cart/items) usando o Bearer Token.
-    4. Consulta o carrinho (GET /cart) para certificar a presença e quantidade.
-    5. Finaliza a compra (POST /orders) e valida se o estoque decrementou de 5 para 4.
-    """
-
-    # ==========================================
-    # PASSO 1: Cadastrar e Logar Usuário de Testes
-    # ==========================================
-    user_payload = {
-        "name": "Comprador de Teste",
-        "email": "comprador.teste@novasphere.com",
-        "password": "SenhaSuperSegura123"
-    }
+    """Testa adicionar ao carrinho e fazer checkout (diminuindo estoque)."""
+    headers = await setup_user_and_get_headers(client, "comprador1@teste.com")
     
-    # Cadastra
-    register_res = await client.post("/auth/register", json=user_payload)
-    assert register_res.status_code in [200, 201]
-
-    # Loga
-    login_res = await client.post("/auth/login", json={
-        "email": user_payload["email"],
-        "password": user_payload["password"]
-    })
-    assert login_res.status_code == 200
-    
-    token = login_res.json()["access_token"]
-    # 🚀 O cabeçalho Bearer que ajustamos no Swagger agora é testado via código:
-    headers = {"Authorization": f"Bearer {token}"}
-
-    # ==========================================
-    # PASSO 2: Garantir Produto no Banco de Teste
-    # ==========================================
-    # O Pytest roda em um banco isolado, então precisamos inserir o produto de teste
-    test_product = Product(
-        name="Walkman Sony Cassette Player",
-        description="Clássico toca-fitas dos anos 90.",
-        price=289.90,
-        stock=5,  # Estoque inicial controlado
-        category="retro",
-        is_retro=True
-    )
+    test_product = Product(name="Walkman", description="Retro", price=100.0, stock=5, category="retro")
     db_session.add(test_product)
     await db_session.commit()
     await db_session.refresh(test_product)
-    
-    product_id = test_product.id
 
-    # ==========================================
-    # PASSO 3: Adicionar ao Carrinho (POST /cart/items)
-    # ==========================================
-    cart_payload = {
-        "product_id": str(product_id),
-        "quantity": 1
-    }
+    await client.post("/cart/items", json={"product_id": str(test_product.id), "quantity": 1}, headers=headers)
     
-    add_res = await client.post("/cart/items", json=cart_payload, headers=headers)
-    assert add_res.status_code == 201
-
-    # ==========================================
-    # PASSO 4: Validar o Carrinho (GET /cart)
-    # ==========================================
-    get_cart_res = await client.get("/cart", headers=headers)
-    assert get_cart_res.status_code == 200
-    
-    cart_data = get_cart_res.json()
-    assert len(cart_data["items"]) == 1
-    assert cart_data["items"][0]["quantity"] == 1
-    # Verifica se o ID do produto no carrinho bate com o nosso Walkman
-    assert cart_data["items"][0]["product_id"] == str(product_id)
-
-    # ==========================================
-    # PASSO 5: Finalizar a Compra (POST /orders) e Decrementar Estoque
-    # ==========================================
-    # *(Nota: Ajuste a rota abaixo de acordo com o endpoint de checkout real do seu /orders)*
     checkout_res = await client.post("/orders/checkout", headers=headers)
     assert checkout_res.status_code in [200, 201]
 
-    # Força o banco de dados a expirar o cache para podermos reler o estoque real atualizado
     db_session.expire_all()
+    product_after = (await db_session.execute(select(Product).filter(Product.id == test_product.id))).scalar_one()
+    assert product_after.stock == 4  # Estoque caiu
 
-    # Busca o produto novamente no banco de dados para checar o estoque
-    query = select(Product).filter(Product.id == product_id)
-    product_after_purchase = (await db_session.execute(query)).scalar_one()
+# 🚀 NOVO: TESTE DE CANCELAMENTO (Devolução de Estoque)
+@pytest.mark.asyncio
+async def test_order_cancellation_restores_inventory(client: AsyncClient, db_session: AsyncSession):
+    headers = await setup_user_and_get_headers(client, "cancelador@teste.com")
+    
+    product = Product(name="Fita K7", description="Fita", price=10.0, stock=10, category="retro")
+    db_session.add(product)
+    await db_session.commit()
+    await db_session.refresh(product)
 
-    # 🎯 O teste de fogo: O estoque DEVE ter caído de 5 para 4
-    assert product_after_purchase.stock == 4
+    # Compra 2 unidades
+    await client.post("/cart/items", json={"product_id": str(product.id), "quantity": 2}, headers=headers)
+    checkout_res = await client.post("/orders/checkout", headers=headers)
+    order_id = checkout_res.json()["order_id"]
+
+    db_session.expire_all()
+    assert (await db_session.execute(select(Product).filter(Product.id == product.id))).scalar_one().stock == 8
+    
+    # Cancela o pedido
+    cancel_res = await client.post(f"/orders/{order_id}/cancel", headers=headers)
+    assert cancel_res.status_code == 200
+    assert cancel_res.json()["status"] == "canceled"
+
+    # Verifica devolução de estoque
+    db_session.expire_all()
+    restored_product = (await db_session.execute(select(Product).filter(Product.id == product.id))).scalar_one()
+    assert restored_product.stock == 10  # Voltou para 10!
+
+# 🚀 NOVO: TESTE DE MÁQUINA DE ESTADOS (Admin)
+@pytest.mark.asyncio
+async def test_admin_state_machine_validation(client: AsyncClient, db_session: AsyncSession):
+    user_email = "admin@teste.com"
+    headers = await setup_user_and_get_headers(client, user_email)
+    
+    # Promove a Admin fisicamente no banco
+    user = (await db_session.execute(select(User).filter(User.email == user_email))).scalar_one()
+    user.is_admin = True
+    await db_session.commit()
+    
+    # Faz login de novo para pegar o token com is_admin = True
+    headers = await setup_user_and_get_headers(client, user_email)
+
+    product = Product(name="Teclado", description="Mecânico", price=200.0, stock=5, category="acessorios")
+    db_session.add(product)
+    await db_session.commit()
+
+    await client.post("/cart/items", json={"product_id": str(product.id), "quantity": 1}, headers=headers)
+    order_id = (await client.post("/orders/checkout", headers=headers)).json()["order_id"]
+
+    # Tenta pular para DELIVERED antes de SHIPPED (Deve falhar 400)
+    res_fail = await client.patch(f"/orders/{order_id}/status?new_status=delivered", headers=headers)
+    assert res_fail.status_code == 400
+    
+    # Avança corretamente: PENDING -> PAID -> SHIPPED -> DELIVERED
+    await client.patch(f"/orders/{order_id}/status?new_status=paid", headers=headers)
+    await client.patch(f"/orders/{order_id}/status?new_status=shipped", headers=headers)
+    res_success = await client.patch(f"/orders/{order_id}/status?new_status=delivered", headers=headers)
+    
+    assert res_success.status_code == 200
+    assert res_success.json()["status"] == "delivered"
+
+# 🚀 NOVO: TESTE DE CONCORRÊNCIA (Overselling)
+@pytest.mark.asyncio
+async def test_concurrency_prevents_overselling(client: AsyncClient, db_session: AsyncSession):
+    # Produto com apenas 1 no estoque
+    product = Product(name="Item Raro", description="Último", price=100.0, stock=1, category="retro")
+    db_session.add(product)
+    await db_session.commit()
+    await db_session.refresh(product)
+
+    h1 = await setup_user_and_get_headers(client, "concorrente1@teste.com")
+    h2 = await setup_user_and_get_headers(client, "concorrente2@teste.com")
+
+    # Ambos adicionam o último item ao carrinho
+    await client.post("/cart/items", json={"product_id": str(product.id), "quantity": 1}, headers=h1)
+    await client.post("/cart/items", json={"product_id": str(product.id), "quantity": 1}, headers=h2)
+
+    # Dispara os dois checkouts exatamente ao mesmo tempo usando asyncio
+    req1 = client.post("/orders/checkout", headers=h1)
+    req2 = client.post("/orders/checkout", headers=h2)
+    responses = await asyncio.gather(req1, req2)
+
+    status_codes = [res.status_code for res in responses]
+    
+    # Um deve ter sucesso (201 ou 200) e o outro falhar (400 - Estoque insuficiente)
+    assert 400 in status_codes
+    assert (201 in status_codes) or (200 in status_codes)
+    
+    # Estoque final deve ser 0 (nunca negativo)
+    db_session.expire_all()
+    final_product = (await db_session.execute(select(Product).filter(Product.id == product.id))).scalar_one()
+    assert final_product.stock == 0

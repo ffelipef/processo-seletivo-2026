@@ -19,7 +19,6 @@ def test_password_hashing():
     assert verify_password(password, hashed) is True
     assert verify_password("senha_errada", hashed) is False
 
-
 def test_jwt_generation_and_decoding():
     """Garante que o token JWT é gerado com os claims corretos e decodificado com sucesso."""
     user_data = {"sub": "12345-uuid-teste"}
@@ -27,10 +26,8 @@ def test_jwt_generation_and_decoding():
     
     assert isinstance(token, str)
     
-    # Decodifica e valida o payload
     payload = decode_access_token(token)
     assert payload.get("sub") == "12345-uuid-teste"
-
 
 # ==========================================
 # 2. TESTES DE INTEGRAÇÃO (Rotas da API)
@@ -52,14 +49,12 @@ async def test_register_user_success(client: AsyncClient, db_session: AsyncSessi
     assert data["email"] == "felipe@teste.com"
     assert "id" in data
     
-    # Verifica se o usuário de fato foi persistido fisicamente no banco de teste
     query = select(User).filter(User.email == "felipe@teste.com")
     result = await db_session.execute(query)
     user_in_db = result.scalar_one_or_none()
     
     assert user_in_db is not None
     assert user_in_db.name == "Felipe Freitas"
-
 
 @pytest.mark.asyncio
 async def test_prevent_duplicate_email_registration(client: AsyncClient):
@@ -70,10 +65,8 @@ async def test_prevent_duplicate_email_registration(client: AsyncClient):
         "password": "SenhaSegura123"
     }
     
-    # Primeiro cadastro
     res1 = await client.post("/auth/register", json=payload)
     assert res1.status_code == 201
     
-    # Tentativa de duplicar
     res2 = await client.post("/auth/register", json=payload)
-    assert res2.status_code == 400  # Ou 422, dependendo do tratamento da sua rota de erro
+    assert res2.status_code == 400
