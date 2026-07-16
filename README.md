@@ -1,106 +1,173 @@
-# Processo Seletivo LAPES 2026
+# 🌌 NovaSphere — Retro-Modern Tech E-Commerce
 
-O LAPES — Laboratório de Pesquisa em Engenharia de Software — está com as seleções abertas para 2026. O processo é composto por um desafio técnico e uma entrevista com o responsável pela área de interesse.
+> **NovaSphere** é um e-commerce retro-moderno focado em tecnologia. Ele mescla a nostalgia dos anos 80, 90 e 2000 (como Walkmans, fitas cassete e MP3 players) com hardware e acessórios de última geração (como ESP32s, gabinetes cibernéticos e fitas de LED RGB). Tudo isso sob uma arquitetura robusta, segura, resiliente e altamente escalável.
 
-Há duas trilhas disponíveis. Você pode seguir pela que mais se alinha ao seu perfil ou encarar ambas, inclusive mesclando os desafios em um único projeto, se fizer sentido.
+Este projeto faz parte do **Processo Seletivo LAPES 2026** (Trilha de Desenvolvimento / DevOps).
 
 ---
 
-## Como entregar
+## 👥 Candidato(s) e Trilha
+* **Candidato:** [Seu Nome Aqui]
+* **Contato:** [E-mail institucional / WhatsApp]
+* **Trilha Escolhida:** Trilha de Desenvolvimento (Fullstack + DevOps)
 
-1. Faça um fork deste repositório.
-2. O repositório deve permanecer público do início ao fim do processo seletivo.
-3. No README do seu fork, inclua:
-   - nome(s) do(s) candidato(s) e trilha(s) escolhida(s);
-   - contato: e-mail institucional e/ou telefone com WhatsApp;
-   - instruções de setup e decisões técnicas, conforme o PDF de cada desafio.
+---
 
-O PDF de cada trilha está na pasta correspondente:
+## 🛠️ Stack Tecnológica
+
+O ecossistema do **NovaSphere** foi desenvolvido utilizando ferramentas modernas do mercado:
+
+### 🟢 Backend (API)
+* **Framework:** [FastAPI](https://fastapi.tiangolo.com/) (Python 3.11/3.12) - Rápido, assíncrono e documentado automaticamente via Swagger/OpenAPI.
+* **Banco de Dados:** [PostgreSQL](https://www.postgresql.org/) com driver assíncrono `asyncpg`.
+* **ORM:** [SQLAlchemy 2.0](https://www.sqlalchemy.org/) com suporte completo a asyncio.
+* **Cache & Limiter:** [Redis](https://redis.io/) (para invalidação de cache e cache de catálogo) + [SlowAPI](https://github.com/laurentS/slowapi) (para rate limiting).
+* **Autenticação:** JWT (JSON Web Tokens) com segurança baseada em Bearer Token e hash de senhas via `bcrypt` direto.
+
+### 🔵 Frontend (Client)
+* **Framework:** [React 19](https://react.dev/) + [Vite](https://vite.dev/) (TypeScript).
+* **Roteamento & State:** [TanStack Router](https://tanstack.com/router) & [TanStack Start](https://tanstack.com/start) + [TanStack Query v5](https://tanstack.com/query) (React Query).
+* **Estilização:** [TailwindCSS v4](https://tailwindcss.com/) + [Radix UI](https://www.radix-ui.com/) para componentes acessíveis e fluidos.
+* **Alertas & Notificações:** [Sonner](https://sonner.emilkowal.ski/).
+
+### 🐳 DevOps & Qualidade
+* **Orquestração:** [Docker](https://www.docker.com/) & [Docker Compose](https://docs.docker.com/compose/) (ambientes multi-containers).
+* **Análise Estática:** [SonarQube](https://www.sonarqube.org/) & [Sonar Scanner](https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/) para qualidade de código e conformidade de segurança.
+* **Segurança de Transporte:** Banco de dados PostgreSQL configurado para exigir conexões criptografadas (**SSL ativo**).
+
+---
+
+## ⚙️ Instruções de Setup
+
+O projeto foi totalmente containerizado. Siga os passos abaixo para executá-lo localmente:
+
+### 📋 Pré-requisitos
+* **Docker** instalado e rodando.
+* **Docker Compose** habilitado.
+
+### 🚀 Executando a Aplicação
+
+1. **Clonar o repositório** e entrar na pasta raiz:
+   ```bash
+   git clone <URL_DO_FORK>
+   cd processo-seletivo-2026
+   ```
+
+2. **Configurar as Variáveis de Ambiente:**
+   Copie o arquivo `.env.example` para `.env` na raiz do projeto:
+   ```bash
+   cp .env.example .env
+   ```
+   > [!NOTE]
+   > O arquivo padrão `.env` já vem pré-configurado com credenciais prontas para o ambiente Docker de desenvolvimento.
+
+3. **Subir os Containers via Docker Compose:**
+   ```bash
+   docker compose up --build -d
+   ```
+   Este comando criará e executará:
+   - **`nova_sphere_db`**: Banco PostgreSQL 16 (SSL habilitado).
+   - **`nova_sphere_redis`**: Redis Cache.
+   - **`nova_sphere_web`**: API Backend FastAPI (Porta `8000`).
+   - **`nova_sphere_frontend`**: App Frontend React (Porta `3000`).
+   - **`nova_sphere_sonar_db`** & **`nova_sphere_sonarqube`**: Servidor SonarQube para análise estática (Porta `9000`).
+
+4. **Popular o Banco de Dados (Seeding):**
+   O script de inicialização do banco (`init.sql`) e a aplicação FastAPI automaticamente criam as tabelas e povoam o banco com o primeiro Administrador. Se desejar popular o catálogo de produtos vintage e cupons de teste, execute o script de sementes (`seed.py`):
+   ```bash
+   docker exec -it nova_sphere_web python seed.py
+   ```
+
+---
+
+## 🔗 Endpoints Principais (Acesso Local)
+
+* **Frontend App:** [http://localhost:3000](http://localhost:3000)
+* **Backend API Swagger:** [http://localhost:8000/docs](http://localhost:8000/docs)
+* **Backend API Redoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
+* **Painel do SonarQube:** [http://localhost:9000](http://localhost:9000)
+
+---
+
+## 🧪 Executando os Testes Automatizados
+
+O projeto conta com um conjunto completo de testes unitários e de integração focados em fluxos críticos (Autenticação, Carrinho, Compra Concorrente, Cancelamento e Máquina de Estados).
+
+Como o banco de dados exige conexão SSL por segurança e o Redis é utilizado no checkout, a melhor maneira de rodar os testes sem conflito de portas locais é executá-los diretamente dentro do container do backend:
+
+```bash
+docker exec nova_sphere_web python -m pytest
+```
+
+> [!TIP]
+> Caso queira rodar os testes localmente na máquina host, certifique-se de que os serviços do Docker Compose estão de pé (para que as portas `5432` e `6379` estejam expostas) e execute:
+> ```powershell
+> $env:POSTGRES_HOST="127.0.0.1"; $env:REDIS_HOST="127.0.0.1"; $env:POSTGRES_USER="novasphere_user"; $env:POSTGRES_PASSWORD="password"; python -m pytest
+> ```
+
+---
+
+## 🧠 Decisões Técnicas & Arquitetura
+
+O sistema foi arquitetado focando nas melhores práticas de engenharia de software assíncrona. Abaixo estão listadas as decisões técnicas de maior relevância:
+
+### 1. Prevenção Absoluta de Overselling (Concorrência Segura)
+Para evitar que dois clientes comprem o último item do estoque de forma simultânea (gerando estoque negativo), foi implementado o bloqueio pessimista a nível de banco de dados (`SELECT ... FOR UPDATE`).
+> [!IMPORTANT]
+> **Resolução de Cache de Sessão:** Durante testes concorrentes reais com SQLAlchemy, se o produto já estiver carregado no mapa de identidade da sessão (por exemplo, via `selectinload` do carrinho), a query `FOR UPDATE` pode retornar o dado atualizado do banco, mas o SQLAlchemy retornará a instância em cache (desatualizada).
+> 
+> Para solucionar este comportamento crítico, o backend utiliza explicitamente `.execution_options(populate_existing=True)` na query de lock. Isso garante que a instância em memória seja atualizada com o estoque real após o desbloqueio da linha.
+
+### 2. Máquina de Estados Rígida para Pedidos (Checkout Flow)
+O status de um pedido segue um fluxo sequencial rígido:
+$$\text{PENDING} \longrightarrow \text{PAID} \longrightarrow \text{SHIPPED} \longrightarrow \text{DELIVERED}$$
+Qualquer tentativa de pular etapas (por exemplo, de `PENDING` para `DELIVERED`) ou realizar transições inválidas (como atualizar um pedido cancelado) é imediatamente rejeitada com um erro `400 Bad Request` pelo validador do backend. Atualizações de status são restritas a usuários com privilégios de **Admin**.
+
+### 3. Mecanismo de Cancelamento com Restauração de Estoque
+Ao cancelar um pedido com status `PENDING` ou `PAID`, o sistema automaticamente devolve as quantidades dos itens comprados ao estoque do produto correspondente, garantindo a integridade dos dados e o retorno correto do produto para venda.
+
+### 4. Estratégia de Caching e Invalidação (Redis)
+Para otimizar o tempo de resposta e evitar sobrecarga de leituras no PostgreSQL, a API de consulta do catálogo realiza cache no Redis. Para evitar dados inconsistentes (stale data), o cache é invalidado imediatamente sempre que:
+* Um novo produto é adicionado, alterado ou excluído.
+* Um checkout é concluído com sucesso (pois há redução do estoque físico dos produtos).
+* Um pedido é cancelado (pois há devolução física de estoque).
+
+### 5. Segurança do Banco de Dados (SSL Require)
+Para evitar interceptação de dados de pagamento ou credenciais de usuários em trânsito, o container PostgreSQL exige conexões seguras. As conexões locais são configuradas com certificados auto-assinados montados em volume (`/var/lib/postgresql/ssl/`). O backend se conecta utilizando o parâmetro `connect_args={"ssl": "require"}`.
+
+### 6. Observabilidade e Logs Estruturados
+O backend utiliza um logger customizado que intercepta todas as requisições HTTP e as registra no console em formato estruturado **JSON**. Isso facilita a ingestão em ferramentas de agregação de logs (como Kibana, Grafana Loki ou Datadog) e permite monitorar o tempo de resposta (`duration_ms`), status HTTP e origem dos acessos em tempo real.
+
+---
+
+## 📁 Estrutura de Pastas
 
 ```
 processo-seletivo-2026/
-├── dados/    ← Trilha de Dados / IA
-└── dev/      ← Trilha de Desenvolvimento
+├── certs/                      # Certificados SSL para criptografia do PostgreSQL
+├── dev/                        # PDFs de especificação do desafio
+├── init-scripts/               # Scripts SQL executados na inicialização do Postgres
+├── novasphere-frontend/        # Aplicação Cliente (Vite/React/TS/TanStack)
+│   ├── src/                    # Código fonte do frontend
+│   └── package.json            # Dependências do frontend
+├── src/                        # Aplicação API Backend (FastAPI/SQLAlchemy)
+│   ├── auth/                   # Módulo de Autenticação, Usuários e Sessões
+│   ├── cart/                   # Módulo de Carrinho de Compras
+│   ├── catalog/                # Módulo de Catálogo de Produtos e Caching
+│   ├── orders/                 # Módulo de Pedidos, Checkout e Cupons
+│   ├── config.py               # Variáveis de ambiente com Pydantic Settings
+│   ├── database.py             # Configuração da conexão com Postgres e Redis
+│   ├── limiter.py              # Configuração global de Rate Limiting
+│   └── main.py                 # Ponto de entrada FastAPI e Middlewares
+├── tests/                      # Suite de Testes Automatizados (Pytest)
+├── Dockerfile                  # Dockerfile do Backend
+├── Dockerfile.db               # Dockerfile do PostgreSQL com suporte a SSL
+├── Dockerfile.frontend         # Dockerfile do Frontend React
+├── docker-compose.yml          # Definição dos containers de desenvolvimento
+├── requirements.txt            # Dependências Python (Backend)
+└── seed.py                     # Script de população do banco de dados (seeding)
 ```
 
-**Em dupla:** apenas um dos candidatos faz o fork; o segundo contribui no mesmo repositório. Ambos os nomes devem constar no README final.
-
 ---
 
-## Trilha de Dados — Sistema Agêntico de IA
-
-Construa um sistema multiagente capaz de responder perguntas sobre um corpus de documentos a sua escolha, combinando recuperação vetorial (RAG) com busca na web como fallback.
-
-**Prazo:** 17 de julho de 2026, até 23:59 (BRT).
-**Formato:** individual ou dupla.
-**Desafio completo:** [`dados/desafio.pdf`](dados/desafio.pdf)
-
-Dúvidas: Giovanni Braga — [e-mail institucional](mailto:giovanni23070008@aluno.cesupa.br)
-
----
-
-## Trilha de Desenvolvimento — Mini E-commerce
-
-Desenvolver uma plataforma de e-commerce simplificada. Um desafio fullstack(frontend, backend e devops), abordando conceitos como cache, rate limiting, testes automatizadoes e entre outros.
-
-**Prazo:** 17 de julho de 2026, até 23:59 (BRT).
-**Formato:** individual ou dupla.
-**Desafio completo:** [`dev/desafio.pdf`](dev/desafio.pdf)
-
-Dúvidas: Gabriel Mattos — [e-mail institucional](mailto:gabriel22070059@aluno.cesupa.br)
-
----
-
-## Apresentações
-
-As apresentações serão realizadas nas primeiras semanas de agosto. Data e horário serão definidos com cada candidato pelo responsável da respectiva trilha. Detalhes sobre formato e duração serão divulgados em breve.
-
----
-
-## Avaliação
-
-Em ambas as trilhas, a nota final é composta por **50% do desafio técnico** e **50% da entrevista** com o responsável pela área. Todos os candidatos que entregarem o desafio são convidados para a entrevista automaticamente. Mais detalhes sobre o formato da entrevista serão divulgados em breve.
-
-Candidatos não selecionados após a entrevista recebem feedback ao final do processo.
-
----
-
-## Sobre o uso de IA
-
-O uso de ferramentas de IA generativa é permitido — faz parte do dia a dia do desenvolvimento moderno. O desafio avalia o seu conhecimento, não o da máquina. Você deve ser capaz de explicar seu código, justificar cada decisão técnica e defender sua arquitetura na apresentação. Copiar sem compreender será evidente na review.
-
----
-
-## FAQ
-
-**Existe algum pré-requisito (curso, período, vínculo institucional)?**
-Não.
-
-**Posso me inscrever nas duas trilhas?**
-Sim. Você pode entregar as duas trilhas separadamente ou mesclá-las em um único projeto, se houver fluidez entre os escopos.
-
-**Deploy público é obrigatório?**
-Não. Basta o repositório rodando localmente conforme o README. Deploy automatizado é diferencial (pontuação extra), conforme detalhado no PDF do desafio.
-
-**Atraso resulta em penalização ou desclassificação?**
-Penalização. O prazo encerra em 17/07/2026 às 23:59. Commits feitos depois do prazo são aceitos, mas implicam desconto na nota do desafio.
-
-**Como faço para tirar dúvidas durante o desafio ou reportar inconsistências?**
-Por contato direto com os responsáveis abaixo. Dúvidas específicas de uma trilha vão para o responsável da área; dúvidas gerais sobre o processo podem ser endereçadas a qualquer um.
-
-- Caio Johnston — [e-mail institucional](mailto:caio21070002@aluno.cesupa.br)
-- Gabriel Mattos — [e-mail institucional](mailto:gabriel22070059@aluno.cesupa.br)
-- Giovanni Braga — [e-mail institucional](mailto:giovanni23070008@aluno.cesupa.br)
-- Isaac Elgrably
-
-Gabriel e Giovanni são da turma CC7NA e podem ser procurados pessoalmente no CESUPA, nos horários da turma (tarde e noite).
-
-Contato organizacional: contato.lapes@gmail.com
-
----
-
-A todos, desejamos um bom projeto, e boa sorte.
-
-Atenciosamente,
-
-Caio Johnston, Gabriel Mattos, Giovanni Braga, e Isaac Elgrably.
+*NovaSphere — Tecnologia com alma retrô e potência moderna.*
