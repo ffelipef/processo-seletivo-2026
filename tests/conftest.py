@@ -26,7 +26,7 @@ test_engine = create_async_engine(
     TEST_DATABASE_URL, 
     echo=False,
     poolclass=NullPool,
-    connect_args={"ssl": "require"}
+    connect_args={"ssl": "require"} if DB_HOST != "localhost" else {}
 )
 
 TestingSessionLocal = async_sessionmaker(
