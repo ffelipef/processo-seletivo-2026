@@ -7,6 +7,9 @@ from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.pool import NullPool
 from unittest.mock import AsyncMock, patch
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from src.main import app
 from src.database import Base, get_db
@@ -22,7 +25,8 @@ TEST_DATABASE_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB
 test_engine = create_async_engine(
     TEST_DATABASE_URL, 
     echo=False,
-    poolclass=NullPool
+    poolclass=NullPool,
+    connect_args={"ssl": "require"}
 )
 
 TestingSessionLocal = async_sessionmaker(
@@ -50,6 +54,16 @@ def mock_redis_cache():
     with patch("src.catalog.service.CatalogService.invalidate_cache", new_callable=AsyncMock) as mock:
         yield mock
 
+@pytest.fixture(scope="session", autouse=True)
+def disable_rate_limiting():
+    """Desativa o rate limiting (SlowAPI) em todas as instâncias do Limiter durante os testes."""
+    from src.limiter import limiter as global_limiter
+    global_limiter.enabled = False
+    
+    from src.auth.routes import limiter as auth_limiter
+    auth_limiter.enabled = False
+
+
 @pytest_asyncio.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """Injeta uma sessão limpa e isolada do banco por teste."""
@@ -58,10 +72,11 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         await session.close()
 
 @pytest_asyncio.fixture
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def client() -> AsyncGenerator[AsyncClient, None]:
     """Injeta um cliente HTTP assíncrono conectado usando o DB de testes."""
     async def override_get_db():
-        yield db_session
+        async with TestingSessionLocal() as session:
+            yield session
         
     app.dependency_overrides[get_db] = override_get_db
     

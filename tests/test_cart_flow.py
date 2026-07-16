@@ -8,8 +8,8 @@ from src.auth.models import User
 
 # Função auxiliar para não repetir código nos testes
 async def setup_user_and_get_headers(client: AsyncClient, email: str):
-    await client.post("/auth/register", json={"name": "Tester", "email": email, "password": "pass"})
-    res = await client.post("/auth/login", json={"email": email, "password": "pass"})
+    await client.post("/auth/register", json={"name": "Tester", "email": email, "password": "password"})
+    res = await client.post("/auth/login", json={"email": email, "password": "password"})
     token = res.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -28,9 +28,8 @@ async def test_full_purchase_and_inventory_decrement_flow(client: AsyncClient, d
     checkout_res = await client.post("/orders/checkout", headers=headers)
     assert checkout_res.status_code in [200, 201]
 
-    db_session.expire_all()
-    product_after = (await db_session.execute(select(Product).filter(Product.id == test_product.id))).scalar_one()
-    assert product_after.stock == 4  # Estoque caiu
+    await db_session.refresh(test_product)
+    assert test_product.stock == 4  # Estoque caiu
 
 # 🚀 NOVO: TESTE DE CANCELAMENTO (Devolução de Estoque)
 @pytest.mark.asyncio
@@ -47,8 +46,8 @@ async def test_order_cancellation_restores_inventory(client: AsyncClient, db_ses
     checkout_res = await client.post("/orders/checkout", headers=headers)
     order_id = checkout_res.json()["order_id"]
 
-    db_session.expire_all()
-    assert (await db_session.execute(select(Product).filter(Product.id == product.id))).scalar_one().stock == 8
+    await db_session.refresh(product)
+    assert product.stock == 8
     
     # Cancela o pedido
     cancel_res = await client.post(f"/orders/{order_id}/cancel", headers=headers)
@@ -56,9 +55,8 @@ async def test_order_cancellation_restores_inventory(client: AsyncClient, db_ses
     assert cancel_res.json()["status"] == "canceled"
 
     # Verifica devolução de estoque
-    db_session.expire_all()
-    restored_product = (await db_session.execute(select(Product).filter(Product.id == product.id))).scalar_one()
-    assert restored_product.stock == 10  # Voltou para 10!
+    await db_session.refresh(product)
+    assert product.stock == 10  # Voltou para 10!
 
 # 🚀 NOVO: TESTE DE MÁQUINA DE ESTADOS (Admin)
 @pytest.mark.asyncio
@@ -121,6 +119,5 @@ async def test_concurrency_prevents_overselling(client: AsyncClient, db_session:
     assert (201 in status_codes) or (200 in status_codes)
     
     # Estoque final deve ser 0 (nunca negativo)
-    db_session.expire_all()
-    final_product = (await db_session.execute(select(Product).filter(Product.id == product.id))).scalar_one()
-    assert final_product.stock == 0
+    await db_session.refresh(product)
+    assert product.stock == 0

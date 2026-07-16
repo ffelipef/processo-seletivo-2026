@@ -101,7 +101,12 @@ class OrderService:
             order_items_to_create = []
 
             product_ids = [item.product_id for item in cart_items]
-            locked_products_query = select(Product).filter(Product.id.in_(product_ids)).with_for_update()
+            locked_products_query = (
+                select(Product)
+                .filter(Product.id.in_(product_ids))
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
             locked_products_result = await db.execute(locked_products_query)
             locked_products = {p.id: p for p in locked_products_result.scalars().all()}
 
@@ -122,7 +127,7 @@ class OrderService:
                     )
 
                 product.stock -= item.quantity
-                total_price += product.price * item.quantity
+                total_price += Decimal(str(product.price)) * item.quantity
 
                 order_item = OrderItem(
                     product_id=product.id,

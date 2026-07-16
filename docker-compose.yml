@@ -48,6 +48,7 @@ services:
       - "8000:8000"
     volumes:
       - ./src:/app/src
+      - ./tests:/app/tests
     environment:
       - POSTGRES_USER=novasphere_user
       # ... suas outras variáveis de ambiente ...

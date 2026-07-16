@@ -1,1 +1,1 @@
-CREATE DATABASE "novasphere_test_db";
+CREATE DATABASE "novasphere_test";
