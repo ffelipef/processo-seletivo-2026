@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-size: ubuntu-latest
+    runs-on: ubuntu-latest
 
     services:
       postgres:
