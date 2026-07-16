@@ -272,4 +272,42 @@ class OrderService:
         
         return order
 
-        
+    async def cancel_order_by_user(self, order_id: UUID, current_user_id: UUID, db: AsyncSession) -> Order:
+        """
+        Permite ao usuário cancelar um pedido antes do envio, devolvendo o estoque.
+        """
+        try:
+            query = select(Order).filter(Order.id == order_id).options(
+                selectinload(Order.items).selectinload(OrderItem.product)
+            ).with_for_update()
+            order = (await db.execute(query)).scalar_one_or_none()
+
+            if not order:
+                raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+
+            if order.user_id != current_user_id:
+                raise HTTPException(status_code=403, detail="Você não tem permissão para cancelar este pedido.")
+
+            # 🚀 Regra do Edital: Cancelamento apenas ANTES de SHIPPED (ou seja, PENDING ou PAID)
+            if order.status in ["shipped", "delivered"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Não é possível cancelar um pedido que já foi {order.status}."
+                )
+                
+            if order.status == "canceled":
+                return order
+
+            # Altera o status e devolve os itens ao estoque de forma atômica
+            order.status = OrderStatus.CANCELED
+            for item in order.items:
+                if item.product:
+                    item.product.stock += item.quantity
+
+            order.updated_at = datetime.now(timezone.utc)
+            await db.commit()
+            await db.refresh(order)
+            return order
+        except Exception:
+            await db.rollback()
+            raise

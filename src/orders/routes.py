@@ -80,6 +80,16 @@ async def get_single_order_details(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado ou você não tem permissão para vê-lo.")
     return order
 
+@router.post("/{order_id}/cancel", response_model=schemas.OrderResponse)
+async def cancel_my_order(
+    order_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    service: OrderService = Depends(get_order_service)
+):
+    """Cancela um pedido do usuário (se ainda não tiver sido enviado) e devolve o estoque."""
+    return await service.cancel_order_by_user(order_id, current_user.id, db)
+
 @router.post("/{order_id}/simulate-payment", response_model=schemas.PaymentSimulationResponse)
 async def simulate_payment_webhook(
     order_id: UUID,
