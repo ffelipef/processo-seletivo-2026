@@ -16,7 +16,7 @@ export const Route = createFileRoute("/success")({
   head: () => ({
     meta: [
       { title: "Status do Pedido — NovaSphere" },
-      { name: "description", content: "Veja o status do seu pedido na NovaSphere e simule o pagamento." },
+      { name: "description", content: "Acompanhe o status do seu pedido." },
     ],
   }),
   component: SuccessPage,
@@ -25,11 +25,14 @@ export const Route = createFileRoute("/success")({
 function SuccessPage() {
   const { orderId } = Route.useSearch();
   const navigate = useNavigate();
-  const { clearCart } = useStore();
+  const { clearCart, auth } = useStore(); 
+
+  // Verifica se o usuário atual é admin para liberar os controles
+  const isAdmin = auth?.is_admin || auth?.user?.is_admin === true;
 
   const [order, setOrder] = useState<OrderResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSimulatingPayment, setIsSimulatingPayment] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -55,27 +58,38 @@ function SuccessPage() {
     fetchOrder();
   }, [orderId, navigate]);
 
-  const handleSimulatePayment = async (simulatedResult: 'success' | 'fail') => {
+  // Ação exclusiva do Admin: Confirmação de Pagamento
+  const handlePaymentAdmin = async (simulatedResult: 'success' | 'fail') => {
     if (!orderId) return;
-
-    setIsSimulatingPayment(true);
+    setIsUpdatingStatus(true);
     try {
       const response: PaymentSimulationResponse = await api.simulatePayment(orderId, simulatedResult);
-      
       setOrder((prevOrder) => prevOrder ? { ...prevOrder, status: response.new_status, updated_at: new Date().toISOString() } : null);
-
       if (response.new_status === 'paid') {
-        toast.success(`Pagamento Aprovado! Pedido #${orderId.substring(0, 8)}.`);
+        toast.success(`Pagamento confirmado! Pedido #${orderId.substring(0, 8)}.`);
         clearCart();
-      } else if (response.new_status === 'failed' || response.new_status === 'canceled') {
-        toast.error(`Pagamento falhou. Pedido #${orderId.substring(0, 8)} foi cancelado e o estoque devolvido.`);
+      } else {
+        toast.error(`Pagamento recusado. Pedido cancelado.`);
       }
     } catch (error) {
-      console.error("Erro ao simular pagamento:", error);
-      const errorMessage = (error as ApiError)?.message || "Ocorreu um erro na simulação de pagamento.";
-      toast.error(errorMessage);
+      toast.error((error as ApiError)?.message || "Erro ao processar pagamento.");
     } finally {
-      setIsSimulatingPayment(false);
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Ação exclusiva do Admin: Avanço de Status (Envio/Entrega)
+  const handleUpdateStatusAdmin = async (newStatus: OrderStatus) => {
+    if (!orderId) return;
+    setIsUpdatingStatus(true);
+    try {
+      const updatedOrder = await api.updateOrderStatusAdmin(orderId, newStatus);
+      setOrder(updatedOrder);
+      toast.success(`Status atualizado para: ${newStatus.toUpperCase()}`);
+    } catch (error) {
+      toast.error((error as ApiError)?.message || "Erro ao atualizar. Sem permissão de Admin?");
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -83,7 +97,7 @@ function SuccessPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.16))] p-4 text-white">
         <Loader2 className="h-10 w-10 animate-spin text-nova-red" />
-        <p className="mt-4 text-lg font-dot">Carregando detalhes do pedido...</p>
+        <p className="mt-4 text-lg font-dot">Buscando sinal do pedido...</p>
       </div>
     );
   }
@@ -92,22 +106,20 @@ function SuccessPage() {
     return (
       <div className="mx-auto max-w-lg px-5 py-16 text-center">
         <h1 className="font-display text-3xl font-semibold text-nova-red">Pedido Não Encontrado</h1>
-        <p className="mt-2 text-muted-foreground">Não foi possível carregar as informações do pedido.</p>
-        <Link to="/" className="snap-btn mt-6 inline-block">
-          Voltar para o Catálogo
-        </Link>
+        <p className="mt-2 text-muted-foreground">O sinal deste pedido foi perdido ou você não tem acesso.</p>
+        <Link to="/" className="snap-btn mt-6 inline-block">Retornar ao Catálogo</Link>
       </div>
     );
   }
 
-  const isPending = order.status === 'pending';
-  const isPaid = order.status === 'paid';
   const isFailedOrCancelled = order.status === 'failed' || order.status === 'canceled';
 
   const getStatusDisplay = (status: OrderStatus) => {
     switch (status) {
       case 'pending': return 'Aguardando Pagamento';
-      case 'paid': return 'Pagamento Aprovado!';
+      case 'paid': return 'Pagamento Aprovado';
+      case 'shipped': return 'Pedido Enviado';
+      case 'delivered': return 'Pedido Entregue';
       case 'failed': return 'Pagamento Falhou';
       case 'canceled': return 'Pedido Cancelado';
       default: return 'Status Desconhecido';
@@ -118,139 +130,88 @@ function SuccessPage() {
     switch (status) {
       case 'pending': return 'text-yellow-500';
       case 'paid': return 'text-green-500';
+      case 'shipped': return 'text-blue-500';
+      case 'delivered': return 'text-emerald-400';
       case 'failed':
       case 'canceled': return 'text-nova-red';
       default: return 'text-gray-400';
     }
   };
 
-  const getStatusIcon = (status: OrderStatus) => {
-    switch (status) {
-      case 'paid': return (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 text-green-500 mx-auto animate-bounce-custom" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      );
-      case 'failed':
-      case 'canceled': return (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 text-nova-red mx-auto animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      );
-      case 'pending':
-      default: return <Loader2 className="h-24 w-24 text-yellow-500 mx-auto animate-spin" />;
-    }
-  };
-
   return (
     <div className="mx-auto max-w-lg px-5 py-16">
       <div className="grid-frame corner-ticks p-8 relative bg-card">
-        {/* Perforated top */}
-        <div
-          className="absolute -top-2 left-0 right-0 h-4"
-          style={{
-            background: "radial-gradient(circle at 8px 8px, var(--background) 4px, transparent 5px) repeat-x",
-            backgroundSize: "16px 16px",
-          }}
-        />
+        <div className="absolute -top-2 left-0 right-0 h-4" style={{ background: "radial-gradient(circle at 8px 8px, var(--background) 4px, transparent 5px) repeat-x", backgroundSize: "16px 16px" }} />
 
         <div className="text-center">
-          {getStatusIcon(order.status)}
           <h1 className={`mt-6 font-display text-3xl font-semibold ${getStatusColorClass(order.status)}`}>
             {getStatusDisplay(order.status)}
           </h1>
           <div className="mt-2 flex items-center justify-center gap-2">
-            <span className="led-dot" />
-            <DotBadge>Pedido ID: {order.id.substring(0, 8)}</DotBadge>
+            <span className={`led-dot ${order.status === 'pending' ? 'animate-pulse' : ''}`} />
+            <DotBadge>Rastreio: {order.id.substring(0, 8)}</DotBadge>
           </div>
         </div>
 
         <div className="mt-8 border-t border-dashed border-border pt-6 space-y-2 text-sm">
-          <Row label="Total do Pedido" value={`$${Number(order.total_price).toFixed(2)}`} />
-          <Row label="Data do Pedido" value={new Date(order.created_at).toLocaleString()} />
-          <Row label="Última Atualização" value={new Date(order.updated_at).toLocaleString()} />
-          <Row label="Status" value={getStatusDisplay(order.status)} className={getStatusColorClass(order.status)} />
+          <Row label="Total" value={`$${Number(order.total_price).toFixed(2)}`} />
+          <Row label="Data" value={new Date(order.created_at).toLocaleString()} />
+          <Row label="Atualização" value={new Date(order.updated_at).toLocaleString()} />
         </div>
 
-        {isPending && (
-          <div className="mt-8 border-t border-dashed border-border pt-6 space-y-4">
-            <h3 className="font-display text-xl font-semibold text-purple-400 text-center">Simular Pagamento</h3>
-            <p className="text-center text-sm text-muted-foreground">Escolha o resultado da simulação para prosseguir:</p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <button
-                onClick={() => handleSimulatePayment('success')}
-                disabled={isSimulatingPayment}
-                className="snap-btn bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:pointer-events-none"
-              >
-                {isSimulatingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin inline-block" /> : null}
-                [ Pagamento Aprovado ]
-              </button>
-              <button
-                onClick={() => handleSimulatePayment('fail')}
-                disabled={isSimulatingPayment}
-                className="snap-btn bg-nova-red hover:bg-red-700 disabled:opacity-50 disabled:pointer-events-none"
-              >
-                {isSimulatingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin inline-block" /> : null}
-                [ Cancelar / Falha ]
-              </button>
+        {/* PROGRESSÃO VISUAL PARA TODOS OS USUÁRIOS */}
+        <div className="mt-8 border-t border-dashed border-border pt-6">
+          <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-4">Progresso na Esteira</h3>
+          <div className="flex justify-between items-center text-[10px] font-dot tracking-wider">
+            <span className={order.status === 'pending' ? 'text-yellow-500' : 'text-foreground'}>[ 1. PENDENTE ]</span>
+            <span className={order.status === 'paid' ? 'text-green-500' : (order.status === 'shipped' || order.status === 'delivered' ? 'text-foreground' : 'text-muted-foreground opacity-30')}>[ 2. PAGO ]</span>
+            <span className={order.status === 'shipped' ? 'text-blue-500' : (order.status === 'delivered' ? 'text-foreground' : 'text-muted-foreground opacity-30')}>[ 3. ENVIADO ]</span>
+            <span className={order.status === 'delivered' ? 'text-emerald-400' : 'text-muted-foreground opacity-30'}>[ 4. ENTREGUE ]</span>
+          </div>
+          {isFailedOrCancelled && (
+            <p className="text-center text-nova-red mt-4 text-xs uppercase tracking-widest animate-pulse">ESTEIRA INTERROMPIDA</p>
+          )}
+        </div>
+
+        {/* 🔒 PAINEL DE CONTROLE EXCLUSIVO DO ADMIN */}
+        {isAdmin && !isFailedOrCancelled && order.status !== 'delivered' && (
+          <div className="mt-8 border-t border-border pt-6 bg-muted/10 -mx-8 px-8 pb-2">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="led-dot bg-nova-red" />
+              <h3 className="font-display text-sm font-semibold text-nova-red uppercase tracking-widest">Override de Admin</h3>
             </div>
-            <p className="mt-3 text-[11px] text-center text-muted-foreground">
-              Atenção: Esta é uma simulação. Em produção, este processo seria automático e seguro.
-            </p>
+            
+            <div className="flex flex-col gap-3">
+              {order.status === 'pending' && (
+                <>
+                  <button onClick={() => handlePaymentAdmin('success')} disabled={isUpdatingStatus} className="snap-btn bg-green-600 hover:bg-green-700 disabled:opacity-50 h-10 w-full text-xs">
+                    Confirmar Pagamento
+                  </button>
+                  <button onClick={() => handlePaymentAdmin('fail')} disabled={isUpdatingStatus} className="snap-btn border border-nova-red text-nova-red hover:bg-nova-red hover:text-white disabled:opacity-50 h-10 w-full text-xs">
+                    Recusar Pagamento
+                  </button>
+                </>
+              )}
+              {order.status === 'paid' && (
+                <button onClick={() => handleUpdateStatusAdmin('shipped' as OrderStatus)} disabled={isUpdatingStatus} className="snap-btn bg-blue-600 hover:bg-blue-700 disabled:opacity-50 h-10 w-full text-xs">
+                  Avançar para ENVIADO
+                </button>
+              )}
+              {order.status === 'shipped' && (
+                <button onClick={() => handleUpdateStatusAdmin('delivered' as OrderStatus)} disabled={isUpdatingStatus} className="snap-btn bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 h-10 w-full text-xs">
+                  Avançar para ENTREGUE
+                </button>
+              )}
+            </div>
           </div>
         )}
 
-        <Link
-          to="/"
-          className="snap-btn mt-6 block text-center h-11 leading-[44px] rounded-full border border-foreground text-xs uppercase tracking-[0.22em] font-medium hover:bg-foreground hover:text-background"
-        >
-          {isFailedOrCancelled ? 'Reabrir Carrinho / Novo Pedido' : 'Continuar Comprando'}
+        <Link to="/" className="snap-btn mt-8 block text-center h-11 leading-[44px] rounded-full border border-foreground text-xs uppercase tracking-[0.22em] font-medium hover:bg-foreground hover:text-background">
+          {isFailedOrCancelled ? 'Novo Pedido' : 'Retornar ao Catálogo'}
         </Link>
 
-        {/* Perforated bottom */}
-        <div
-          className="absolute -bottom-2 left-0 right-0 h-4"
-          style={{
-            background: "radial-gradient(circle at 8px 8px, var(--background) 4px, transparent 5px) repeat-x",
-            backgroundSize: "16px 16px",
-          }}
-        />
+        <div className="absolute -bottom-2 left-0 right-0 h-4" style={{ background: "radial-gradient(circle at 8px 8px, var(--background) 4px, transparent 5px) repeat-x", backgroundSize: "16px 16px" }} />
       </div>
-      
-      {/* Confetes para PAID */}
-      {isPaid && (
-          <style dangerouslySetInnerHTML={{__html: `
-              @keyframes fall {
-                0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
-                100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
-              }
-              .confetti {
-                position: fixed;
-                width: 8px;
-                height: 8px;
-                background-color: hsl(var(--nova-red));
-                border-radius: 50%;
-                animation: fall 3s ease-out forwards;
-                opacity: 0;
-                pointer-events: none;
-                z-index: 9999;
-              }
-              .confetti:nth-child(2n) { background-color: yellow; }
-              .confetti:nth-child(3n) { background-color: purple; }
-              .confetti:nth-child(4n) { background-color: cyan; }
-              ${Array.from({ length: 50 }).map((_, i) => `
-                .confetti:nth-child(${i + 1}) {
-                  left: ${Math.random() * 100}vw;
-                  animation-delay: ${Math.random() * 2}s;
-                  animation-duration: ${2 + Math.random() * 2}s;
-                  transform: scale(${0.5 + Math.random()});
-                }
-              `).join('')}
-          `}} />
-      )}
-      {isPaid && Array.from({ length: 50 }).map((_, i) => (
-          <div key={i} className="confetti" style={{ animationDelay: `${Math.random() * 3}s` }}></div>
-      ))}
     </div>
   );
 }

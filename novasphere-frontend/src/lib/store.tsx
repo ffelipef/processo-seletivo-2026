@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, getToken, setToken, type Cart, type CartItem, type Product, MOCK_PRODUCTS } from "./api";
 
-type AuthState = { email: string | null; token: string | null };
+// 🚀 1. Adicionado is_admin no AuthState
+type AuthState = { email: string | null; token: string | null; is_admin: boolean };
 
 type StoreCtx = {
   auth: AuthState;
@@ -20,8 +21,8 @@ type StoreCtx = {
   setQty: (product_id: string, qty: number) => void;
   removeItem: (product_id: string) => void;
   clearCart: () => void;
-  // 🚀 CORREÇÃO AQUI: A interface agora aceita o cupom opcional
   checkout: (couponCode?: string) => Promise<{ order_id: string; total: number }>;
+  refreshProducts: () => Promise<void>;
 };
 
 const Ctx = createContext<StoreCtx | null>(null);
@@ -33,8 +34,23 @@ function calcTotal(items: CartItem[], products: Product[]) {
   }, 0);
 }
 
+// 🚀 2. Função nativa para ler o JWT sem precisar de bibliotecas extras
+function parseJwt(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [auth, setAuth] = useState<AuthState>({ email: null, token: null });
+  // 🚀 3. Estado inicial agora tem is_admin: false
+  const [auth, setAuth] = useState<AuthState>({ email: null, token: null, is_admin: false });
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [productsLoading, setProductsLoading] = useState(true);
   const [cart, setCart] = useState<Cart>({ items: [], total: 0 });
@@ -46,7 +62,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const email = typeof window !== "undefined" ? localStorage.getItem("nova.email") : null;
     
     if (token) {
-      setAuth({ email, token });
+      // 🚀 4. Decodifica o token para pegar o is_admin ao recarregar a página
+      const payload = parseJwt(token);
+      const is_admin = payload?.is_admin === true;
+
+      setAuth({ email, token, is_admin });
       try {
         // Só restaura o carrinho local se houver um usuário autenticado ativo
         const raw = typeof window !== "undefined" ? localStorage.getItem("nova.cart") : null;
@@ -64,7 +84,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     api.catalog().then((list) => {
       if (!alive) return;
 
-      // BLINDAGEM MÁXIMA: Garante que o estado seja estritamente um Array
       if (Array.isArray(list)) {
         setProducts(list);
       } else {
@@ -95,35 +114,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Só persiste o carrinho no localStorage se estiver logado
       localStorage.setItem("nova.cart", JSON.stringify(cart.items));
     }
-  }, [cart.items, products, auth.token]); // eslint-disable-line
+  }, [cart.items, products, auth.token]);
 
   const login = useCallback(async (email: string, password: string) => {
     const r = await api.login(email, password);
     setToken(r.access_token);
     if (typeof window !== "undefined") localStorage.setItem("nova.email", email);
-    setAuth({ email, token: r.access_token });
+    
+    // 🚀 5. Decodifica o token após o login
+    const payload = parseJwt(r.access_token);
+    const is_admin = payload?.is_admin === true;
+
+    setAuth({ email, token: r.access_token, is_admin });
   }, []);
 
   const register = useCallback(async (email: string, password: string) => {
     const r = await api.register(email, password);
     setToken(r.access_token);
     if (typeof window !== "undefined") localStorage.setItem("nova.email", email);
-    setAuth({ email, token: r.access_token });
+    
+    // 🚀 6. Decodifica o token após o registro
+    const payload = parseJwt(r.access_token);
+    const is_admin = payload?.is_admin === true;
+
+    setAuth({ email, token: r.access_token, is_admin });
   }, []);
 
-  // Limpa o token, e-mail, estado do carrinho e o localStorage correspondente
   const logout = useCallback(() => {
     setToken(null);
     if (typeof window !== "undefined") {
       localStorage.removeItem("nova.email");
       localStorage.removeItem("nova.cart");
     }
-    setCart({ items: [], total: 0 }); // Esvazia o carrinho visualmente
-    setAuth({ email: null, token: null });
+    setCart({ items: [], total: 0 }); 
+    // 🚀 7. Reseta o is_admin no logout
+    setAuth({ email: null, token: null, is_admin: false });
   }, []);
 
   const addToCart = useCallback(async (p: Product, qty = 1) => {
-    // Impede adicionar itens se não estiver logado
     if (!auth.token) {
       alert("Please log in to add items to your cart.");
       return;
@@ -165,18 +193,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshProducts = useCallback(async () => {
-    const list = await api.catalog(); // Busca direto da fonte
+    const list = await api.catalog();
     setProducts(list);
-}, []);
+  }, []);
 
-  // 🚀 CORREÇÃO AQUI: Recebe o couponCode e repassa para api.checkout
   const checkout = useCallback(async (couponCode?: string) => {
-    // Sem token, o checkout não prossegue sob nenhuma hipótese
     if (!auth.token) {
       throw new Error("You must be logged in to checkout.");
     }
     
-    // Repassa a variável em vez de chamar vazio
     const r = await api.checkout(couponCode);
     clearCart();
     await refreshProducts();
