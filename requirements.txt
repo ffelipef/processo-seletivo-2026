@@ -5,6 +5,7 @@ alembic==1.13.1
 redis==5.0.4
 pydantic[email]==2.7.4
 passlib[bcrypt]==1.7.4
+bcrypt==4.1.2
 pyjwt==2.8.0
 slowapi==0.1.9
 python-dotenv==1.0.1
