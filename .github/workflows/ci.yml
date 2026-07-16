@@ -53,6 +53,6 @@ jobs:
       env:
         DATABASE_URL: postgresql+asyncpg://postgres:password@localhost:5432/novasphere_test
         REDIS_URL: redis://localhost:6379/0
-        JWT_SECRET: test-secret-key-lapes-2026
+        SECRET_KEY: test-secret-key-lapes-2026  # 🚀 CORREÇÃO: Trocado de JWT_SECRET para SECRET_KEY
       run: |
         pytest --cov=src tests/
