@@ -136,6 +136,15 @@ async def general_exception_handler(request: Request, exc: Exception):
         content={"message": "Erro interno do servidor. Por favor, tente novamente mais tarde."},
     )
 
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """Retorna o status de saúde da API (Diferencial de Observabilidade)."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "environment": "production_docker"
+    }
+
 @app.get("/")
 async def root():
     return {"message": "Bem-vindo à NOVA Sphere API!"}

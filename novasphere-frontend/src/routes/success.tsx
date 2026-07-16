@@ -25,7 +25,9 @@ export const Route = createFileRoute("/success")({
 function SuccessPage() {
   const { orderId } = Route.useSearch();
   const navigate = useNavigate();
-  const { clearCart, auth } = useStore(); 
+  
+  // 🚀 CORREÇÃO: Puxando o refreshProducts da store para atualizar o catálogo imediatamente
+  const { clearCart, auth, refreshProducts } = useStore(); 
 
   // Verifica se o usuário atual é admin para liberar os controles
   const isAdmin = auth?.is_admin || auth?.user?.is_admin === true;
@@ -33,6 +35,7 @@ function SuccessPage() {
   const [order, setOrder] = useState<OrderResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -58,6 +61,27 @@ function SuccessPage() {
     fetchOrder();
   }, [orderId, navigate]);
 
+  // Ação do Cliente: Cancelar Pedido
+  const handleCancelOrder = async () => {
+    if (!orderId) return;
+    if (!confirm("Tem certeza que deseja cancelar este pedido? O processo não pode ser desfeito.")) return;
+
+    setIsCanceling(true);
+    try {
+      const updatedOrder = await api.cancelOrder(orderId);
+      setOrder(updatedOrder);
+      
+      // 🚀 CORREÇÃO: Força o frontend a buscar os dados sem cache do backend
+      await refreshProducts(); 
+      
+      toast.success("Pedido cancelado. O estoque foi devolvido com sucesso.");
+    } catch (error) {
+      toast.error((error as ApiError)?.message || "Erro ao tentar cancelar o pedido.");
+    } finally {
+      setIsCanceling(false);
+    }
+  };
+
   // Ação exclusiva do Admin: Confirmação de Pagamento
   const handlePaymentAdmin = async (simulatedResult: 'success' | 'fail') => {
     if (!orderId) return;
@@ -69,6 +93,8 @@ function SuccessPage() {
         toast.success(`Pagamento confirmado! Pedido #${orderId.substring(0, 8)}.`);
         clearCart();
       } else {
+        // 🚀 CORREÇÃO: Atualiza a vitrine se o admin falhar o pagamento (estoque volta)
+        await refreshProducts();
         toast.error(`Pagamento recusado. Pedido cancelado.`);
       }
     } catch (error) {
@@ -113,6 +139,7 @@ function SuccessPage() {
   }
 
   const isFailedOrCancelled = order.status === 'failed' || order.status === 'canceled';
+  const canBeCanceledByUser = order.status === 'pending' || order.status === 'paid';
 
   const getStatusDisplay = (status: OrderStatus) => {
     switch (status) {
@@ -173,7 +200,20 @@ function SuccessPage() {
           )}
         </div>
 
-        {/* 🔒 PAINEL DE CONTROLE EXCLUSIVO DO ADMIN */}
+        {/* AÇÃO DO CLIENTE: CANCELAR PEDIDO */}
+        {!isAdmin && canBeCanceledByUser && (
+          <div className="mt-6 flex justify-center">
+             <button 
+                onClick={handleCancelOrder} 
+                disabled={isCanceling} 
+                className="text-xs text-muted-foreground hover:text-nova-red transition-colors underline underline-offset-4 disabled:opacity-50"
+              >
+                {isCanceling ? 'Cancelando...' : 'Deseja cancelar este pedido?'}
+              </button>
+          </div>
+        )}
+
+        {/* PAINEL DE CONTROLE EXCLUSIVO DO ADMIN */}
         {isAdmin && !isFailedOrCancelled && order.status !== 'delivered' && (
           <div className="mt-8 border-t border-border pt-6 bg-muted/10 -mx-8 px-8 pb-2">
             <div className="flex items-center gap-2 mb-4">

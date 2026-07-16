@@ -164,6 +164,8 @@ class OrderService:
 
             await db.commit()
             await db.refresh(new_order)
+            
+            # Limpa o cache após o checkout (estoque caiu)
             from src.catalog.service import CatalogService
             from src.cache import redis_client
 
@@ -223,6 +225,13 @@ class OrderService:
             await db.commit()
             await db.refresh(order)
 
+            # 🚀 CORREÇÃO: Limpa o cache se o pagamento falhou e o estoque voltou
+            if payment_status == "fail":
+                from src.catalog.service import CatalogService
+                from src.cache import redis_client
+                catalog_service = CatalogService(redis_client)
+                await catalog_service.invalidate_cache()
+
             return order
         except Exception:
             await db.rollback()
@@ -246,7 +255,6 @@ class OrderService:
         return (await db.execute(query)).scalars().all()
     
     async def update_status_by_admin(self, order_id: UUID, new_status: OrderStatus, db: AsyncSession) -> Order:
-        # 🚀 AQUI ESTÁ A CORREÇÃO: Adicionamos o .options(selectinload...)
         query = (
             select(Order)
             .filter(Order.id == order_id)
@@ -288,7 +296,6 @@ class OrderService:
             if order.user_id != current_user_id:
                 raise HTTPException(status_code=403, detail="Você não tem permissão para cancelar este pedido.")
 
-            # 🚀 Regra do Edital: Cancelamento apenas ANTES de SHIPPED (ou seja, PENDING ou PAID)
             if order.status in ["shipped", "delivered"]:
                 raise HTTPException(
                     status_code=400,
@@ -307,6 +314,13 @@ class OrderService:
             order.updated_at = datetime.now(timezone.utc)
             await db.commit()
             await db.refresh(order)
+
+            # 🚀 CORREÇÃO: Limpa o cache para a vitrine ser atualizada imediatamente
+            from src.catalog.service import CatalogService
+            from src.cache import redis_client
+            catalog_service = CatalogService(redis_client)
+            await catalog_service.invalidate_cache()
+
             return order
         except Exception:
             await db.rollback()
