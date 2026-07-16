@@ -7,8 +7,9 @@ Este projeto faz parte do **Processo Seletivo LAPES 2026** (Trilha de Desenvolvi
 ---
 
 ## 👥 Candidato(s) e Trilha
-* **Candidato:** [Seu Nome Aqui]
-* **Contato:** [E-mail institucional / WhatsApp]
+* **Candidato:** Felipe de Freitas da Silva
+* **Contato:** felipe24070063@aluno.cesupa.br
+* **Telefone:** (91) 983637153
 * **Trilha Escolhida:** Trilha de Desenvolvimento (Fullstack + DevOps)
 
 ---
