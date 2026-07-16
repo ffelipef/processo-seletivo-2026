@@ -91,16 +91,15 @@ async def json_logging_middleware(request: Request, call_next):
     
     return response
 
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
+from src.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
@@ -112,6 +111,14 @@ app.include_router(cart_router)
 app.include_router(orders_router)
 
 # --- HANDLERS DE EXCEÇÕES ---
+@app.exception_handler(IntegrityError)
+async def integrity_exception_handler(request: Request, exc: IntegrityError):
+    logger.warning(f"IntegrityError: {exc.orig}")
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"message": "Conflito de dados. O recurso já existe ou viola uma restrição única."},
+    )
+
 @app.exception_handler(FastAPIHTTPException)
 async def http_exception_handler(request: Request, exc: FastAPIHTTPException):
     logger.warning(f"HTTPException: {exc.detail} - Status: {exc.status_code}")
@@ -137,12 +144,20 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 @app.get("/health", tags=["Health"])
-async def health_check():
-    """Retorna o status de saúde da API (Diferencial de Observabilidade)."""
+async def health_check(db: AsyncSession = Depends(get_db)):
+    """Retorna o status de saúde da API e do banco de dados."""
+    try:
+        await db.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception as e:
+        logger.error(f"Erro de conexão com o banco no healthcheck: {e}")
+        db_status = "disconnected"
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status == "connected" else "unhealthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "environment": "production_docker"
+        "environment": "production_docker",
+        "db_status": db_status
     }
 
 @app.get("/")
